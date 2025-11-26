@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import streamlit as st
 
 def generate_hourly_index(year=2024):
     """Generates a datetime index for a given year."""
@@ -7,6 +8,9 @@ def generate_hourly_index(year=2024):
     end_date = f'{year}-12-31 23:00'
     return pd.date_range(start=start_date, end=end_date, freq='H')
 
+
+
+@st.cache_data
 def generate_load_profile(annual_consumption_mwh, profile_type='Business', year=2024):
     """
     Generates an hourly load profile based on annual consumption and a profile type.
@@ -72,6 +76,9 @@ def generate_load_profile(annual_consumption_mwh, profile_type='Business', year=
     
     return pd.Series(final_shape * scaling_factor, index=index, name='Load_MW')
 
+
+
+@st.cache_data
 def generate_solar_profile(capacity_mw=None, annual_mwh=None, year=2024):
     """Generates a synthetic solar profile. Can specify either capacity or annual MWh."""
     index = generate_hourly_index(year)
@@ -108,6 +115,9 @@ def generate_solar_profile(capacity_mw=None, annual_mwh=None, year=2024):
     
     return pd.Series(generation, index=index, name='Solar_MW')
 
+
+
+@st.cache_data
 def generate_wind_profile(capacity_mw=None, annual_mwh=None, year=2024):
     """Generates a synthetic wind profile. Can specify either capacity or annual MWh."""
     index = generate_hourly_index(year)
