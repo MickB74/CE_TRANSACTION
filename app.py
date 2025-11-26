@@ -230,7 +230,7 @@ for r in results:
         'RECs Out (MWh)': r['swap_exported'],
         'Swap Net ($)': r['swap_net_settlement'],
         'Needed RECs (MWh)': r['shortfall_mwh'].sum(),
-        'Cost for Needed RECs': r['shortfall_mwh'].sum() * rec_price,
+        'Cost for Needed RECs': -1 * r['shortfall_mwh'].sum() * rec_price,
         'Unused RECs (MWh)': r['excess_mwh'].sum() - r['swap_exported'],
         'Value of Unused RECs': (r['excess_mwh'].sum() - r['swap_exported']) * rec_price
     })
@@ -246,7 +246,7 @@ member_metrics.append({
     'RECs Out (MWh)': 0,
     'Swap Net ($)': 0, # Internal sum is zero
     'Needed RECs (MWh)': (-agg_total_re + aggregated_load).clip(lower=0).sum(),
-    'Cost for Needed RECs': (-agg_total_re + aggregated_load).clip(lower=0).sum() * rec_price,
+    'Cost for Needed RECs': -1 * (-agg_total_re + aggregated_load).clip(lower=0).sum() * rec_price,
     'Unused RECs (MWh)': (agg_total_re - aggregated_load).clip(lower=0).sum(),
     'Value of Unused RECs': (agg_total_re - aggregated_load).clip(lower=0).sum() * rec_price
 })
