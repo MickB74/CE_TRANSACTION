@@ -85,6 +85,9 @@ for comp in st.session_state.companies:
     matched_energy = pd.Series(index=load.index, data=[min(l, g) for l, g in zip(load, total_re)])
     match_pct = (matched_energy.sum() / total_demand) * 100 if total_demand > 0 else 0
     
+    # Volumetric % (Total Gen / Total Load)
+    volumetric_pct = (total_gen / total_demand) * 100 if total_demand > 0 else 0
+    
     # REC Value
     rec_value = total_gen * 5 # $5/MWh
     
@@ -96,6 +99,7 @@ for comp in st.session_state.companies:
         'total_re': total_re,
         'matched_energy': matched_energy,
         'match_pct': match_pct,
+        'volumetric_pct': volumetric_pct,
         'rec_value': rec_value,
         'total_demand': total_demand,
         'total_gen': total_gen
@@ -127,7 +131,35 @@ m2.metric("Total Generation", f"{agg_total_re.sum()/1000:,.1f} GWh")
 m3.metric("Pool Match %", f"{agg_match_pct:.1f}%")
 m4.metric("Total REC Value ($5/MWh)", f"${agg_rec_value:,.0f}")
 
-# 2. Comparison Chart (Individual vs Pool)
+# 2. Member Performance Table
+st.subheader("Member Performance Metrics")
+member_metrics = []
+for r in results:
+    member_metrics.append({
+        'Participant': r['name'],
+        'Annual Load (MWh)': r['total_demand'],
+        'RE Generation (MWh)': r['total_gen'],
+        'Volumetric RE %': r['volumetric_pct'],
+        'Carbon Free % (Hourly Match)': r['match_pct']
+    })
+# Add Pool Row
+member_metrics.append({
+    'Participant': 'Aggregated Pool',
+    'Annual Load (MWh)': aggregated_load.sum(),
+    'RE Generation (MWh)': agg_total_re.sum(),
+    'Volumetric RE %': (agg_total_re.sum() / aggregated_load.sum()) * 100,
+    'Carbon Free % (Hourly Match)': agg_match_pct
+})
+
+df_metrics = pd.DataFrame(member_metrics)
+st.dataframe(df_metrics.style.format({
+    'Annual Load (MWh)': '{:,.0f}',
+    'RE Generation (MWh)': '{:,.0f}',
+    'Volumetric RE %': '{:.1f}%',
+    'Carbon Free % (Hourly Match)': '{:.1f}%'
+}), use_container_width=True)
+
+# 3. Comparison Chart (Individual vs Pool)
 st.subheader("Match % Comparison: Individual vs Aggregated")
 comparison_data = []
 for r in results:
@@ -135,8 +167,8 @@ for r in results:
 comparison_data.append({'Name': 'Aggregated Pool', 'Match %': agg_match_pct, 'Type': 'Pool'})
 
 df_comp = pd.DataFrame(comparison_data)
-fig_comp = px.bar(df_comp, x='Name', y='Match %', color='Type', text_auto='.1f', color_discrete_map={'Individual': 'gray', 'Pool': 'green'})
-fig_comp.add_hline(y=agg_match_pct, line_dash="dot", annotation_text="Pool Level", annotation_position="top right")
+fig_comp = px.bar(df_comp, x='Name', y='Match %', color='Type', text_auto='.1f', color_discrete_map={'Individual': '#7f7f7f', 'Pool': '#00CC96'})
+fig_comp.add_hline(y=agg_match_pct, line_dash="dash", line_color="#00FF00", line_width=3, annotation_text="Pool Level", annotation_position="top right")
 st.plotly_chart(fig_comp, use_container_width=True)
 
 # 3. Detailed View
@@ -174,15 +206,15 @@ end_idx = start_idx + pd.Timedelta(days=7)
 subset = df_plot[start_idx:end_idx]
 
 fig_ts = go.Figure()
-fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Load'], name='Load', line=dict(color='black', width=3)))
-fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Solar'], name='Solar', fill='tozeroy', line=dict(color='orange', width=0)))
-fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Wind'], name='Wind', fill='tonexty', line=dict(color='cyan', width=0)))
+fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Load'], name='Load', line=dict(color='#AB63FA', width=3)))
+fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Solar'], name='Solar', fill='tozeroy', line=dict(color='#FFA15A', width=0)))
+fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Wind'], name='Wind', fill='tonexty', line=dict(color='#19D3F3', width=0)))
 fig_ts.update_layout(title=f"{title} - Hourly Dispatch (First Week)", xaxis_title="Time", yaxis_title="MW", height=400)
 st.plotly_chart(fig_ts, use_container_width=True)
 
 # Monthly View
 monthly = df_plot.resample('M').sum() / 1000 # GWh
 monthly.index = monthly.index.strftime('%b')
-fig_bar = px.bar(monthly, x=monthly.index, y=['Solar', 'Wind'], title=f"{title} - Monthly Energy Balance")
-fig_bar.add_trace(go.Scatter(x=monthly.index, y=monthly['Load'], name='Load', line=dict(color='black', width=3)))
+fig_bar = px.bar(monthly, x=monthly.index, y=['Solar', 'Wind'], title=f"{title} - Monthly Energy Balance", color_discrete_map={'Solar': '#FFA15A', 'Wind': '#19D3F3'})
+fig_bar.add_trace(go.Scatter(x=monthly.index, y=monthly['Load'], name='Load', line=dict(color='#AB63FA', width=3)))
 st.plotly_chart(fig_bar, use_container_width=True)
