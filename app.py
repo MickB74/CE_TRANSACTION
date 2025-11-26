@@ -197,12 +197,23 @@ for r in results:
 # --- Dashboard ---
 
 # 1. Summary Metrics (Aggregated)
+# Calculate Pool Financials
+pool_net_load = agg_total_re - aggregated_load
+pool_unused_recs = pool_net_load.clip(lower=0).sum()
+pool_unused_value = pool_unused_recs * rec_price
+pool_shortfall_recs = -pool_net_load.clip(upper=0).sum()
+pool_shortfall_cost = pool_shortfall_recs * rec_price
+
 st.markdown("### Aggregated Pool Performance")
-m1, m2, m3, m4 = st.columns(4)
+m1, m2, m3 = st.columns(3)
 m1.metric("Total Demand", f"{aggregated_load.sum()/1000:,.1f} GWh")
 m2.metric("Total Generation", f"{agg_total_re.sum()/1000:,.1f} GWh")
 m3.metric("Pool Match %", f"{agg_match_pct:.1f}%")
+
+m4, m5, m6 = st.columns(3)
 m4.metric(f"Total REC Value (${rec_price}/MWh)", f"${agg_rec_value:,.0f}")
+m5.metric("Value of Unused RECs", f"${pool_unused_value:,.0f}", f"{pool_unused_recs:,.0f} MWh")
+m6.metric("Cost for Needed RECs", f"-${pool_shortfall_cost:,.0f}", f"{pool_shortfall_recs:,.0f} MWh")
 
 # 2. Member Performance Table
 st.subheader("Member Performance Metrics (With Swaps)")
@@ -250,14 +261,7 @@ st.dataframe(df_metrics.style.format({
     'Unused RECs (MWh)': '{:,.0f}'
 }).apply(lambda x: ['background-color: #e0e0e0; font-weight: bold; color: black' if x['Participant'] == 'Aggregated Pool' else '' for i in x], axis=1), use_container_width=True, hide_index=True)
 
-# Unused Pool RECs & Shortfall
-pool_net_load = agg_total_re - aggregated_load
-pool_unused_recs = pool_net_load.clip(lower=0).sum()
-pool_unused_value = pool_unused_recs * rec_price
-
-pool_shortfall_recs = -pool_net_load.clip(upper=0).sum()
-pool_shortfall_cost = pool_shortfall_recs * rec_price
-
+# Unused Pool RECs & Shortfall (Already calculated above)
 c_unused, c_shortfall = st.columns(2)
 c_unused.metric("Unused Pool RECs (Surplus)", f"{pool_unused_recs:,.0f} MWh", f"${pool_unused_value:,.0f} Revenue")
 c_shortfall.metric("Pool Shortfall (Deficit)", f"{pool_shortfall_recs:,.0f} MWh", f"-${pool_shortfall_cost:,.0f} Cost")
