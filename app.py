@@ -206,15 +206,15 @@ end_idx = start_idx + pd.Timedelta(days=7)
 subset = df_plot[start_idx:end_idx]
 
 fig_ts = go.Figure()
+fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Total RE'], name='Renewables', fill='tozeroy', line=dict(color='#00CC96', width=0)))
 fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Load'], name='Load', line=dict(color='#AB63FA', width=3)))
-fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Solar'], name='Solar', fill='tozeroy', line=dict(color='#FFA15A', width=0)))
-fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Wind'], name='Wind', fill='tonexty', line=dict(color='#19D3F3', width=0)))
 fig_ts.update_layout(title=f"{title} - Hourly Dispatch (First Week)", xaxis_title="Time", yaxis_title="MW", height=400)
 st.plotly_chart(fig_ts, use_container_width=True)
 
 # Monthly View
 monthly = df_plot.resample('M').sum() / 1000 # GWh
 monthly.index = monthly.index.strftime('%b')
-fig_bar = px.bar(monthly, x=monthly.index, y=['Solar', 'Wind'], title=f"{title} - Monthly Energy Balance", color_discrete_map={'Solar': '#FFA15A', 'Wind': '#19D3F3'})
+monthly['Renewables'] = monthly['Solar'] + monthly['Wind']
+fig_bar = px.bar(monthly, x=monthly.index, y=['Renewables'], title=f"{title} - Monthly Energy Balance", color_discrete_map={'Renewables': '#00CC96'})
 fig_bar.add_trace(go.Scatter(x=monthly.index, y=monthly['Load'], name='Load', line=dict(color='#AB63FA', width=3)))
 st.plotly_chart(fig_bar, use_container_width=True)
