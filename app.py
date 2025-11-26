@@ -211,38 +211,44 @@ for r in results:
     member_metrics.append({
         'Participant': r['name'],
         'Annual Load (MWh)': r['total_demand'],
+        'Total Generation (MWh)': r['total_gen'],
         'Volumetric RE %': r['volumetric_pct'],
         'Standalone CFE %': r['match_pct'],
         'Optimized CFE %': r['optimized_match_pct'],
         'RECs In (MWh)': r['swap_imported'],
         'RECs Out (MWh)': r['swap_exported'],
         'Swap Net ($)': r['swap_net_settlement'],
-        'Needed RECs (MWh)': r['shortfall_mwh'].sum()
+        'Needed RECs (MWh)': r['shortfall_mwh'].sum(),
+        'Unused RECs (MWh)': r['excess_mwh'].sum() - r['swap_exported']
     })
 # Add Pool Row
 member_metrics.append({
     'Participant': 'Aggregated Pool',
     'Annual Load (MWh)': aggregated_load.sum(),
+    'Total Generation (MWh)': agg_total_re.sum(),
     'Volumetric RE %': (agg_total_re.sum() / aggregated_load.sum()) * 100,
     'Standalone CFE %': agg_match_pct,
     'Optimized CFE %': agg_match_pct, # Pool is already optimized internally
     'RECs In (MWh)': 0,
     'RECs Out (MWh)': 0,
     'Swap Net ($)': 0, # Internal sum is zero
-    'Needed RECs (MWh)': (-agg_total_re + aggregated_load).clip(lower=0).sum()
+    'Needed RECs (MWh)': (-agg_total_re + aggregated_load).clip(lower=0).sum(),
+    'Unused RECs (MWh)': (agg_total_re - aggregated_load).clip(lower=0).sum()
 })
 
 df_metrics = pd.DataFrame(member_metrics)
 st.dataframe(df_metrics.style.format({
     'Annual Load (MWh)': '{:,.0f}',
+    'Total Generation (MWh)': '{:,.0f}',
     'Volumetric RE %': '{:.1f}%',
     'Standalone CFE %': '{:.1f}%',
     'Optimized CFE %': '{:.1f}%',
     'RECs In (MWh)': '{:,.0f}',
     'RECs Out (MWh)': '{:,.0f}',
     'Swap Net ($)': '${:,.0f}',
-    'Needed RECs (MWh)': '{:,.0f}'
-}), use_container_width=True)
+    'Needed RECs (MWh)': '{:,.0f}',
+    'Unused RECs (MWh)': '{:,.0f}'
+}).apply(lambda x: ['background-color: #e0e0e0; font-weight: bold; color: black' if x['Participant'] == 'Aggregated Pool' else '' for i in x], axis=1), use_container_width=True, hide_index=True)
 
 # Unused Pool RECs & Shortfall
 pool_net_load = agg_total_re - aggregated_load
