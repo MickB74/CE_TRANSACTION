@@ -230,7 +230,9 @@ for r in results:
         'RECs Out (MWh)': r['swap_exported'],
         'Swap Net ($)': r['swap_net_settlement'],
         'Needed RECs (MWh)': r['shortfall_mwh'].sum(),
-        'Unused RECs (MWh)': r['excess_mwh'].sum() - r['swap_exported']
+        'Cost for Needed RECs': r['shortfall_mwh'].sum() * rec_price,
+        'Unused RECs (MWh)': r['excess_mwh'].sum() - r['swap_exported'],
+        'Value of Unused RECs': (r['excess_mwh'].sum() - r['swap_exported']) * rec_price
     })
 # Add Pool Row
 member_metrics.append({
@@ -244,7 +246,9 @@ member_metrics.append({
     'RECs Out (MWh)': 0,
     'Swap Net ($)': 0, # Internal sum is zero
     'Needed RECs (MWh)': (-agg_total_re + aggregated_load).clip(lower=0).sum(),
-    'Unused RECs (MWh)': (agg_total_re - aggregated_load).clip(lower=0).sum()
+    'Cost for Needed RECs': (-agg_total_re + aggregated_load).clip(lower=0).sum() * rec_price,
+    'Unused RECs (MWh)': (agg_total_re - aggregated_load).clip(lower=0).sum(),
+    'Value of Unused RECs': (agg_total_re - aggregated_load).clip(lower=0).sum() * rec_price
 })
 
 df_metrics = pd.DataFrame(member_metrics)
@@ -258,7 +262,9 @@ st.dataframe(df_metrics.style.format({
     'RECs Out (MWh)': '{:,.0f}',
     'Swap Net ($)': '${:,.0f}',
     'Needed RECs (MWh)': '{:,.0f}',
-    'Unused RECs (MWh)': '{:,.0f}'
+    'Cost for Needed RECs': '${:,.0f}',
+    'Unused RECs (MWh)': '{:,.0f}',
+    'Value of Unused RECs': '${:,.0f}'
 }).apply(lambda x: ['background-color: #e0e0e0; font-weight: bold; color: black' if x['Participant'] == 'Aggregated Pool' else '' for i in x], axis=1), use_container_width=True, hide_index=True)
 
 # Unused Pool RECs & Shortfall (Already calculated above)
