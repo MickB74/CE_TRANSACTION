@@ -72,35 +72,44 @@ def generate_load_profile(annual_consumption_mwh, profile_type='Business', year=
     
     return pd.Series(final_shape * scaling_factor, index=index, name='Load_MW')
 
-def generate_solar_profile(capacity_mw, year=2024):
-    """Generates a synthetic solar profile."""
+def generate_solar_profile(capacity_mw=None, annual_mwh=None, year=2024):
+    """Generates a synthetic solar profile. Can specify either capacity or annual MWh."""
     index = generate_hourly_index(year)
-    hours = index.hour
-    day_of_year = index.dayofyear
+    hours = index.hour.to_numpy()
+    day_of_year = index.dayofyear.to_numpy()
     
     # Solar elevation proxy
-    # Peak at noon, zero at night. Seasonality affects duration and intensity.
     declination = 23.45 * np.sin(2 * np.pi * (284 + day_of_year) / 365)
-    # Simplified solar model
     hour_angle = 15 * (hours - 12)
-    # This is a very rough approximation of solar irradiance
     elevation = np.maximum(0, np.sin(np.radians(declination)) * np.sin(np.radians(30)) + \
                 np.cos(np.radians(declination)) * np.cos(np.radians(30)) * np.cos(np.radians(hour_angle)))
     
     irradiance = elevation * 1000 # W/m2 approx
     
     # Add cloud cover noise
-    cloud_cover = np.random.beta(2, 5, len(index)) # Skewed towards clear days
+    cloud_cover = np.random.beta(2, 5, len(index)) 
     final_output = irradiance * (1 - cloud_cover * 0.8)
     
-    # Normalize to capacity (assuming 1000 W/m2 is STC)
-    generation = (final_output / 1000) * capacity_mw
+    # Determine generation profile
+    if annual_mwh is not None:
+        # Normalize to sum to annual_mwh
+        total_raw = np.sum(final_output)
+        if total_raw > 0:
+            generation = (final_output / total_raw) * annual_mwh
+        else:
+            generation = np.zeros(len(index))
+    elif capacity_mw is not None:
+        # Normalize to capacity (assuming 1000 W/m2 is STC)
+        generation = (final_output / 1000) * capacity_mw
+    else:
+        generation = np.zeros(len(index))
+        
     generation = np.maximum(generation, 0)
     
     return pd.Series(generation, index=index, name='Solar_MW')
 
-def generate_wind_profile(capacity_mw, year=2024):
-    """Generates a synthetic wind profile."""
+def generate_wind_profile(capacity_mw=None, annual_mwh=None, year=2024):
+    """Generates a synthetic wind profile. Can specify either capacity or annual MWh."""
     index = generate_hourly_index(year)
     
     # Weibull distribution for wind speed
@@ -109,18 +118,31 @@ def generate_wind_profile(capacity_mw, year=2024):
     # Power curve approximation (cut-in 3, rated 12, cut-out 25)
     generation = np.zeros(len(index))
     
+    # Use a temporary capacity of 1.0 to get the shape
+    temp_capacity = 1.0
+    
     mask_ramp = (wind_speed >= 3) & (wind_speed < 12)
-    generation[mask_ramp] = ((wind_speed[mask_ramp] - 3) / 9) ** 3 * capacity_mw
+    generation[mask_ramp] = ((wind_speed[mask_ramp] - 3) / 9) ** 3 * temp_capacity
     
     mask_rated = (wind_speed >= 12) & (wind_speed < 25)
-    generation[mask_rated] = capacity_mw
+    generation[mask_rated] = temp_capacity
     
     # Add some autocorrelation to make it look like wind
     # Simple smoothing
     series = pd.Series(generation, index=index)
     smoothed = series.rolling(window=3, center=True).mean().fillna(0)
     
-    return smoothed.rename('Wind_MW')
+    if annual_mwh is not None:
+        # Normalize to sum to annual_mwh
+        total_raw = smoothed.sum()
+        final_generation = (smoothed / total_raw) * annual_mwh
+    elif capacity_mw is not None:
+        # Scale by capacity
+        final_generation = smoothed * capacity_mw
+    else:
+        final_generation = np.zeros(len(index))
+    
+    return final_generation.rename('Wind_MW')
 
 class BatteryStorage:
     def __init__(self, power_mw, energy_mwh, efficiency=0.9):

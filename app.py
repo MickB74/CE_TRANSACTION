@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from utils import generate_load_profile, generate_solar_profile, generate_wind_profile
@@ -15,10 +16,10 @@ st.sidebar.header("1. Define Participants")
 # Initialize session state for companies if not exists
 if 'companies' not in st.session_state:
     st.session_state.companies = [
-        {'name': 'Tech Corp', 'demand': 150000, 'profile': 'Data Center', 'solar_mw': 40.0, 'wind_mw': 10.0},
-        {'name': 'City Hospital', 'demand': 40000, 'profile': 'Health Care', 'solar_mw': 5.0, 'wind_mw': 5.0},
-        {'name': 'Mega Mall', 'demand': 25000, 'profile': 'Retail', 'solar_mw': 10.0, 'wind_mw': 0.0},
-        {'name': 'Heavy Industry', 'demand': 200000, 'profile': 'Industrial', 'solar_mw': 20.0, 'wind_mw': 60.0}
+        {'name': 'Tech Corp', 'demand': 150000, 'profile': 'Data Center', 'solar_mwh': 110000, 'wind_mwh': 45000}, # Total ~155k
+        {'name': 'City Hospital', 'demand': 40000, 'profile': 'Health Care', 'solar_mwh': 25000, 'wind_mwh': 20000}, # Total ~45k
+        {'name': 'Mega Mall', 'demand': 25000, 'profile': 'Retail', 'solar_mwh': 30000, 'wind_mwh': 0}, # Total ~30k
+        {'name': 'Heavy Industry', 'demand': 200000, 'profile': 'Industrial', 'solar_mwh': 80000, 'wind_mwh': 160000} # Total ~240k
     ]
 
 def add_company():
@@ -26,8 +27,8 @@ def add_company():
         'name': f'New Co {len(st.session_state.companies)+1}', 
         'demand': 10000, 
         'profile': 'Business',
-        'solar_mw': 0.0,
-        'wind_mw': 0.0
+        'solar_mwh': 0.0,
+        'wind_mwh': 0.0
     })
 
 def remove_company():
@@ -41,27 +42,34 @@ col2.button("Remove Last", on_click=remove_company)
 # Display Company Inputs
 updated_companies = []
 for i, comp in enumerate(st.session_state.companies):
-    with st.sidebar.expander(f"{comp['name']}", expanded=False):
-        name = st.text_input(f"Name", value=comp['name'], key=f"name_{i}")
-        c1, c2 = st.columns(2)
-        demand = c1.number_input(f"Load (MWh)", value=comp['demand'], step=1000, key=f"demand_{i}")
-        
-        profile_options = ['Business', 'Industrial', 'Residential', 'Data Center', 'Health Care', 'Retail']
-        profile = c2.selectbox(f"Profile", profile_options, index=profile_options.index(comp['profile']), key=f"profile_{i}")
-        
-        st.markdown("**PPA Assets**")
-        c3, c4 = st.columns(2)
-        solar_mw = c3.number_input(f"Solar (MW)", value=comp['solar_mw'], step=1.0, key=f"solar_{i}")
-        wind_mw = c4.number_input(f"Wind (MW)", value=comp['wind_mw'], step=1.0, key=f"wind_{i}")
-        
-        updated_companies.append({
-            'name': name, 'demand': demand, 'profile': profile,
-            'solar_mw': solar_mw, 'wind_mw': wind_mw
-        })
+    st.sidebar.markdown(f"### {comp['name']}")
+    
+    c1, c2 = st.sidebar.columns(2)
+    name = c1.text_input(f"Name", value=comp['name'], key=f"name_{i}")
+    demand = c2.number_input(f"Load (MWh)", value=comp['demand'], step=1000, key=f"demand_{i}")
+    
+    profile_options = ['Business', 'Industrial', 'Residential', 'Data Center', 'Health Care', 'Retail']
+    profile = st.sidebar.selectbox(f"Profile", profile_options, index=profile_options.index(comp['profile']), key=f"profile_{i}")
+    
+    st.sidebar.markdown("**PPA Assets (Annual Generation)**")
+    c3, c4 = st.sidebar.columns(2)
+    solar_mwh = c3.number_input(f"Solar (MWh)", value=float(comp['solar_mwh']), step=1000.0, key=f"solar_{i}")
+    wind_mwh = c4.number_input(f"Wind (MWh)", value=float(comp['wind_mwh']), step=1000.0, key=f"wind_{i}")
+    
+    updated_companies.append({
+        'name': name, 'demand': demand, 'profile': profile,
+        'solar_mwh': solar_mwh, 'wind_mwh': wind_mwh
+    })
 
 st.session_state.companies = updated_companies
 
+st.sidebar.markdown("---")
+st.sidebar.header("2. Market Parameters")
+rec_price = st.sidebar.number_input("REC Price ($/MWh)", value=5.0, step=0.5)
+
 # --- Simulation Logic ---
+
+np.random.seed(42) # Ensure deterministic results on re-runs
 
 results = []
 aggregated_load = None
@@ -73,8 +81,8 @@ for comp in st.session_state.companies:
     load = generate_load_profile(comp['demand'], comp['profile'])
     
     # 2. Generation
-    solar = generate_solar_profile(comp['solar_mw'])
-    wind = generate_wind_profile(comp['wind_mw'])
+    solar = generate_solar_profile(annual_mwh=comp['solar_mwh'])
+    wind = generate_wind_profile(annual_mwh=comp['wind_mwh'])
     total_re = solar + wind
     
     # 3. Metrics
@@ -88,8 +96,15 @@ for comp in st.session_state.companies:
     # Volumetric % (Total Gen / Total Load)
     volumetric_pct = (total_gen / total_demand) * 100 if total_demand > 0 else 0
     
-    # REC Value
-    rec_value = total_gen * 5 # $5/MWh
+    # REC Position (Hourly)
+    net_position = total_re - load # Positive = Excess, Negative = Shortfall
+    excess_mwh = net_position.clip(lower=0)
+    shortfall_mwh = -net_position.clip(upper=0)
+    
+    # Financials
+    rec_value_total = total_gen * rec_price # Value of all RECs generated
+    excess_value = excess_mwh.sum() * rec_price
+    shortfall_cost = shortfall_mwh.sum() * rec_price
     
     results.append({
         'name': comp['name'],
@@ -100,7 +115,11 @@ for comp in st.session_state.companies:
         'matched_energy': matched_energy,
         'match_pct': match_pct,
         'volumetric_pct': volumetric_pct,
-        'rec_value': rec_value,
+        'rec_value': rec_value_total,
+        'excess_mwh': excess_mwh,
+        'shortfall_mwh': shortfall_mwh,
+        'excess_value': excess_value,
+        'shortfall_cost': shortfall_cost,
         'total_demand': total_demand,
         'total_gen': total_gen
     })
@@ -119,7 +138,61 @@ for comp in st.session_state.companies:
 agg_total_re = aggregated_solar + aggregated_wind
 agg_matched = pd.Series(index=aggregated_load.index, data=[min(l, g) for l, g in zip(aggregated_load, agg_total_re)])
 agg_match_pct = (agg_matched.sum() / aggregated_load.sum()) * 100 if aggregated_load.sum() > 0 else 0
-agg_rec_value = agg_total_re.sum() * 5
+agg_rec_value = agg_total_re.sum() * rec_price
+
+# --- Swap Logic (Pro-Rata Allocation) ---
+# 1. Create DataFrame of Net Positions (Columns = Companies, Index = Time)
+# Rule: Must have > 100% Volumetric RE to participate
+eligible_companies = [r['name'] for r in results if r['volumetric_pct'] >= 100]
+net_positions_df = pd.DataFrame({r['name']: r['total_re'] - r['load'] for r in results if r['name'] in eligible_companies})
+swap_results = {r['name']: {'imported': 0, 'exported': 0, 'cost': 0, 'revenue': 0} for r in results}
+
+# 2. Iterate Hourly
+if not net_positions_df.empty:
+    hourly_imports = pd.DataFrame(0.0, index=net_positions_df.index, columns=net_positions_df.columns)
+
+    for t in net_positions_df.index:
+        row = net_positions_df.loc[t]
+        longs = row[row > 0]
+        shorts = row[row < 0]
+        
+        total_surplus = longs.sum()
+        total_deficit = -shorts.sum() # Positive number
+        
+        if total_surplus > 0 and total_deficit > 0:
+            # Amount to swap is limited by supply or demand
+            swappable = min(total_surplus, total_deficit)
+            
+            # Pro-rata allocation
+            for name, surplus in longs.items():
+                export_amt = (surplus / total_surplus) * swappable
+                swap_results[name]['exported'] += export_amt
+                swap_results[name]['revenue'] += export_amt * rec_price
+                
+            for name, deficit in shorts.items():
+                import_amt = (abs(deficit) / total_deficit) * swappable
+                swap_results[name]['imported'] += import_amt
+                swap_results[name]['cost'] += import_amt * rec_price
+                hourly_imports.at[t, name] = import_amt
+else:
+    st.warning("No companies eligible for swapping (>100% Volumetric RE required).")
+
+# 3. Update Results with Swap Info
+for r in results:
+    name = r['name']
+    swaps = swap_results[name]
+    
+    # Optimized Match = Original Match + Imported Swaps
+    # Note: Original Match is Min(Load, Gen). Imported Swaps fill the gap.
+    # Check: Ensure we don't exceed Load. (Logic above ensures import <= deficit, so Match + Import <= Load)
+    
+    optimized_match_mwh = r['matched_energy'].sum() + swaps['imported']
+    optimized_match_pct = (optimized_match_mwh / r['total_demand']) * 100 if r['total_demand'] > 0 else 0
+    
+    r['swap_imported'] = swaps['imported']
+    r['swap_exported'] = swaps['exported']
+    r['swap_net_settlement'] = swaps['revenue'] - swaps['cost']
+    r['optimized_match_pct'] = optimized_match_pct
 
 # --- Dashboard ---
 
@@ -129,35 +202,51 @@ m1, m2, m3, m4 = st.columns(4)
 m1.metric("Total Demand", f"{aggregated_load.sum()/1000:,.1f} GWh")
 m2.metric("Total Generation", f"{agg_total_re.sum()/1000:,.1f} GWh")
 m3.metric("Pool Match %", f"{agg_match_pct:.1f}%")
-m4.metric("Total REC Value ($5/MWh)", f"${agg_rec_value:,.0f}")
+m4.metric(f"Total REC Value (${rec_price}/MWh)", f"${agg_rec_value:,.0f}")
 
 # 2. Member Performance Table
-st.subheader("Member Performance Metrics")
+st.subheader("Member Performance Metrics (With Swaps)")
 member_metrics = []
 for r in results:
     member_metrics.append({
         'Participant': r['name'],
         'Annual Load (MWh)': r['total_demand'],
-        'RE Generation (MWh)': r['total_gen'],
         'Volumetric RE %': r['volumetric_pct'],
-        'Carbon Free % (Hourly Match)': r['match_pct']
+        'Standalone CFE %': r['match_pct'],
+        'Optimized CFE %': r['optimized_match_pct'],
+        'RECs In (MWh)': r['swap_imported'],
+        'RECs Out (MWh)': r['swap_exported'],
+        'Swap Net ($)': r['swap_net_settlement']
     })
 # Add Pool Row
 member_metrics.append({
     'Participant': 'Aggregated Pool',
     'Annual Load (MWh)': aggregated_load.sum(),
-    'RE Generation (MWh)': agg_total_re.sum(),
     'Volumetric RE %': (agg_total_re.sum() / aggregated_load.sum()) * 100,
-    'Carbon Free % (Hourly Match)': agg_match_pct
+    'Standalone CFE %': agg_match_pct,
+    'Optimized CFE %': agg_match_pct, # Pool is already optimized internally
+    'RECs In (MWh)': 0,
+    'RECs Out (MWh)': 0,
+    'Swap Net ($)': 0 # Internal sum is zero
 })
 
 df_metrics = pd.DataFrame(member_metrics)
 st.dataframe(df_metrics.style.format({
     'Annual Load (MWh)': '{:,.0f}',
-    'RE Generation (MWh)': '{:,.0f}',
     'Volumetric RE %': '{:.1f}%',
-    'Carbon Free % (Hourly Match)': '{:.1f}%'
+    'Standalone CFE %': '{:.1f}%',
+    'Optimized CFE %': '{:.1f}%',
+    'RECs In (MWh)': '{:,.0f}',
+    'RECs Out (MWh)': '{:,.0f}',
+    'Swap Net ($)': '${:,.0f}'
 }), use_container_width=True)
+
+# Unused Pool RECs
+pool_net_load = agg_total_re - aggregated_load
+pool_unused_recs = pool_net_load.clip(lower=0).sum()
+pool_unused_value = pool_unused_recs * rec_price
+
+st.caption(f"**Unused Pool RECs:** {pool_unused_recs:,.0f} MWh (Potential Revenue: ${pool_unused_value:,.0f})")
 
 # 3. Comparison Chart (Individual vs Pool)
 st.subheader("Match % Comparison: Individual vs Aggregated")
@@ -200,15 +289,23 @@ df_plot = pd.DataFrame({
     'Total RE': target_re
 })
 
-week_start = st.date_input("Select Start Date", value=pd.to_datetime("2024-06-01"), key="date_picker")
-start_idx = pd.Timestamp(week_start)
-end_idx = start_idx + pd.Timedelta(days=7)
-subset = df_plot[start_idx:end_idx]
+c_date, c_view = st.columns([2, 2])
+view_mode = c_view.radio("View Mode", ["Weekly", "Full Year"], horizontal=True)
+
+if view_mode == "Weekly":
+    week_start = c_date.date_input("Select Start Date", value=pd.to_datetime("2024-06-01"), key="date_picker")
+    start_idx = pd.Timestamp(week_start)
+    end_idx = start_idx + pd.Timedelta(days=7)
+    subset = df_plot[start_idx:end_idx]
+    chart_title_suffix = "(Selected Week)"
+else:
+    subset = df_plot
+    chart_title_suffix = "(Full Year)"
 
 fig_ts = go.Figure()
 fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Total RE'], name='Renewables', fill='tozeroy', line=dict(color='#00CC96', width=0)))
-fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Load'], name='Load', line=dict(color='#AB63FA', width=3)))
-fig_ts.update_layout(title=f"{title} - Hourly Dispatch (First Week)", xaxis_title="Time", yaxis_title="MW", height=400)
+fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Load'], name='Load', line=dict(color='#AB63FA', width=1)))
+fig_ts.update_layout(title=f"{title} - Hourly Dispatch {chart_title_suffix}", xaxis_title="Time", yaxis_title="MW", height=400)
 st.plotly_chart(fig_ts, use_container_width=True)
 
 # Monthly View
@@ -218,3 +315,40 @@ monthly['Renewables'] = monthly['Solar'] + monthly['Wind']
 fig_bar = px.bar(monthly, x=monthly.index, y=['Renewables'], title=f"{title} - Monthly Energy Balance", color_discrete_map={'Renewables': '#00CC96'})
 fig_bar.add_trace(go.Scatter(x=monthly.index, y=monthly['Load'], name='Load', line=dict(color='#AB63FA', width=3)))
 st.plotly_chart(fig_bar, use_container_width=True)
+
+# REC Position Analysis
+st.subheader("REC Position Analysis")
+if view_option == "Aggregated Pool":
+    net_pos = agg_total_re - aggregated_load
+    exc_mwh = net_pos.clip(lower=0)
+    short_mwh = -net_pos.clip(upper=0)
+    exc_val = exc_mwh.sum() * rec_price
+    short_cost = short_mwh.sum() * rec_price
+else:
+    # Already calculated in results
+    exc_mwh = res['excess_mwh']
+    short_mwh = res['shortfall_mwh']
+    exc_val = res['excess_value']
+    short_cost = res['shortfall_cost']
+    net_pos = res['total_re'] - res['load']
+
+c1, c2 = st.columns(2)
+c1.metric("Excess RECs (Surplus)", f"{exc_mwh.sum():,.0f} MWh", f"${exc_val:,.0f} Revenue")
+c2.metric("Needed RECs (Shortfall)", f"{short_mwh.sum():,.0f} MWh", f"-${short_cost:,.0f} Cost")
+
+# Hourly Net Position Chart
+df_pos = pd.DataFrame({'Net Position': net_pos})
+if view_mode == "Weekly":
+    subset_pos = df_pos[start_idx:end_idx]
+else:
+    subset_pos = df_pos
+
+fig_pos = go.Figure()
+fig_pos.add_trace(go.Bar(
+    x=subset_pos.index, 
+    y=subset_pos['Net Position'],
+    marker_color=subset_pos['Net Position'].apply(lambda x: '#00CC96' if x >= 0 else '#EF553B'),
+    name='Net Position'
+))
+fig_pos.update_layout(title=f"{title} - Hourly REC Position {chart_title_suffix}", xaxis_title="Time", yaxis_title="MW", height=400)
+st.plotly_chart(fig_pos, use_container_width=True)
