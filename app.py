@@ -343,11 +343,26 @@ else:
     subset = df_plot
     chart_title_suffix = "(Full Year)"
 
-fig_ts = go.Figure()
-fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Total RE'], name='Renewables', fill='tozeroy', line=dict(color='#00CC96', width=0)))
-fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Load'], name='Load', line=dict(color='#AB63FA', width=1)))
-fig_ts.update_layout(title=f"{title} - Hourly Dispatch {chart_title_suffix}", xaxis_title="Time", yaxis_title="MW", height=400)
-st.plotly_chart(fig_ts, use_container_width=True)
+tab_chart, tab_data = st.tabs(["Chart", "Net Positions Data"])
+
+with tab_chart:
+    fig_ts = go.Figure()
+    fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Total RE'], name='Renewables', fill='tozeroy', line=dict(color='#00CC96', width=0)))
+    fig_ts.add_trace(go.Scatter(x=subset.index, y=subset['Load'], name='Load', line=dict(color='#AB63FA', width=1)))
+    fig_ts.update_layout(title=f"{title} - Hourly Dispatch {chart_title_suffix}", xaxis_title="Time", yaxis_title="MW", height=400)
+    st.plotly_chart(fig_ts, use_container_width=True)
+
+with tab_data:
+    st.markdown("### Hourly Net Positions (Load - Generation)")
+    st.markdown("Positive values indicate a **Deficit** (Import needed), Negative values indicate a **Surplus** (Export available).")
+    
+    # Filter for selected time range if desired, or show full year
+    if view_mode == "Weekly":
+        data_to_show = net_positions_df[start_idx:end_idx]
+    else:
+        data_to_show = net_positions_df
+        
+    st.dataframe(data_to_show.style.format("{:,.1f}"), use_container_width=True)
 
 # Monthly View
 monthly = df_plot.resample('M').sum() / 1000 # GWh
