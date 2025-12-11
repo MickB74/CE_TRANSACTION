@@ -3,7 +3,12 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-from utils import generate_load_profile, generate_solar_profile, generate_wind_profile, calculate_swap_value
+from utils import (
+    generate_load_profile, 
+    generate_solar_profile, 
+    generate_wind_profile, 
+    calculate_swap_value
+)
 
 st.set_page_config(page_title="Aggregated Procurement Tool", layout="wide")
 
