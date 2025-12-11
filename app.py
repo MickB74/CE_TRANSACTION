@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-from utils import generate_load_profile, generate_solar_profile, generate_wind_profile
+from utils import generate_load_profile, generate_solar_profile, generate_wind_profile, calculate_swap_value
 
 st.set_page_config(page_title="Aggregated Procurement Tool", layout="wide")
 
@@ -214,6 +214,18 @@ m4, m5, m6 = st.columns(3)
 m4.metric(f"Total REC Value (${rec_price}/MWh)", f"${agg_rec_value:,.0f}")
 m5.metric("Value of Unused RECs", f"${pool_unused_value:,.0f}", f"{pool_unused_recs:,.0f} MWh")
 m6.metric("Cost for Needed RECs", f"-${pool_shortfall_cost:,.0f}", f"{pool_shortfall_recs:,.0f} MWh")
+
+# --- Financial Value of Swaps ---
+if not net_positions_df.empty:
+    # Pass Load - Gen (Deficit = Positive)
+    swap_stats, _ = calculate_swap_value(-net_positions_df, market_rec_price=rec_price)
+    
+    st.markdown("### Financial Value of Internal Swaps")
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("Volume Swapped", f"{swap_stats['Total Volume Swapped (MWh)']:,.0f} MWh")
+    s2.metric("Value Created", f"${swap_stats['Market Value of Swaps ($)']:,.0f}")
+    s3.metric("Manager Revenue (20%)", f"${swap_stats['Projected Manager Revenue ($)']:,.0f}")
+    s4.metric("Client Net Savings", f"${swap_stats['Client Net Savings ($)']:,.0f}")
 
 # 2. Member Performance Table
 st.subheader("Member Performance Metrics (With Swaps)")

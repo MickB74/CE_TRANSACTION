@@ -191,3 +191,49 @@ class BatteryStorage:
             
         return pd.Series(dispatch_mw, index=net_load.index, name='Battery_Dispatch_MW'), \
                pd.Series(soc_profile, index=net_load.index, name='Battery_SOC_MWh')
+
+def calculate_swap_value(hourly_data, market_rec_price=5.00, manager_fee_pct=0.20):
+    """
+    Calculates the financial value of the internal REC swaps.
+    
+    Parameters:
+    - hourly_data (pd.DataFrame): DataFrame with columns for each participant's hourly Net Position 
+                                  (Load - Generation). 
+                                  Positive = Deficit (Need Power), Negative = Surplus (Exporting).
+    - market_rec_price (float): The cost ($/MWh) to buy a REC on the open market.
+    - manager_fee_pct (float): The percentage of the savings you keep as revenue.
+    
+    Returns:
+    - dict: Contains total savings, volume swapped, and your potential revenue.
+    """
+    
+    # 1. Identify Longs (Surplus) and Shorts (Deficit) for every hour
+    # 'clip(lower=0)' gives us only the deficits (Shorts)
+    # 'clip(upper=0).abs()' gives us only the surpluses (Longs)
+    total_market_deficits = hourly_data.clip(lower=0).sum(axis=1)
+    total_market_surpluses = hourly_data.clip(upper=0).abs().sum(axis=1)
+    
+    # 2. Calculate the "Swappable Volume"
+    # In any given hour, the amount we can swap is limited by the smaller of the two sides.
+    # If the group needs 100 MW but only has 20 MW surplus, we swap 20 MW.
+    # If the group has 100 MW surplus but only needs 20 MW, we swap 20 MW.
+    hourly_swapped_volume = np.minimum(total_market_deficits, total_market_surpluses)
+    
+    # 3. Calculate Financials
+    total_swapped_mwh = hourly_swapped_volume.sum()
+    
+    # Value Created = (Volume Swapped) * (Price they would have paid on the market)
+    total_value_created = total_swapped_mwh * market_rec_price
+    
+    # Your Revenue
+    manager_revenue = total_value_created * manager_fee_pct
+    
+    # 4. Formatted Summary
+    results = {
+        "Total Volume Swapped (MWh)": round(total_swapped_mwh, 2),
+        "Market Value of Swaps ($)": round(total_value_created, 2),
+        "Projected Manager Revenue ($)": round(manager_revenue, 2),
+        "Client Net Savings ($)": round(total_value_created - manager_revenue, 2)
+    }
+    
+    return results, hourly_swapped_volume
