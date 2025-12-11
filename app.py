@@ -231,6 +231,18 @@ if not net_positions_df.empty:
     s2.metric("Value Created", f"${swap_stats['Market Value of Swaps ($)']:,.0f}")
     s3.metric("Manager Revenue (20%)", f"${swap_stats['Projected Manager Revenue ($)']:,.0f}")
     s4.metric("Client Net Savings", f"${swap_stats['Client Net Savings ($)']:,.0f}")
+    
+    with st.expander("How are these calculated?"):
+        st.markdown(f"""
+        **1. Volume Swapped:** Sum of matching hourly surplus and deficits within the pool. 
+        (e.g., If Pool Surplus=100 and Pool Deficit=20, Swappable=20)
+        
+        **2. Value Created:** `Volume Swapped` × `REC Price (${rec_price}/MWh)`
+        
+        **3. Manager Revenue:** `Value Created` × `20%` (Assumed Fee)
+        
+        **4. Client Net Savings:** `Value Created` - `Manager Revenue`
+        """)
 
 # 2. Member Performance Table
 st.subheader("Member Performance Metrics (With Swaps)")
