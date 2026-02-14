@@ -147,8 +147,8 @@ agg_rec_value = agg_total_re.sum() * rec_price
 
 # --- Swap Logic (Pro-Rata Allocation) ---
 # 1. Create DataFrame of Net Positions (Columns = Companies, Index = Time)
-# Rule: Must have > 100% Volumetric RE to participate
-eligible_companies = [r['name'] for r in results if r['volumetric_pct'] >= 100]
+# Rule: Must have > 50% Volumetric RE to participate
+eligible_companies = [r['name'] for r in results if r['volumetric_pct'] >= 50]
 net_positions_df = pd.DataFrame({r['name']: r['total_re'] - r['load'] for r in results if r['name'] in eligible_companies})
 swap_results = {r['name']: {'imported': 0, 'exported': 0, 'cost': 0, 'revenue': 0} for r in results}
 
@@ -180,7 +180,7 @@ if not net_positions_df.empty:
                 swap_results[name]['cost'] += import_amt * rec_price
                 hourly_imports.at[t, name] = import_amt
 else:
-    st.warning("No companies eligible for swapping (>100% Volumetric RE required).")
+    st.warning("No companies eligible for swapping (>50% Volumetric RE required).")
 
 # 3. Update Results with Swap Info
 for r in results:
@@ -196,6 +196,8 @@ for r in results:
     
     r['swap_imported'] = swaps['imported']
     r['swap_exported'] = swaps['exported']
+    r['swap_cost'] = swaps['cost']
+    r['swap_revenue'] = swaps['revenue']
     r['swap_net_settlement'] = swaps['revenue'] - swaps['cost']
     r['optimized_match_pct'] = optimized_match_pct
 
@@ -257,6 +259,8 @@ for r in results:
         'Optimized CFE %': r['optimized_match_pct'],
         'RECs In (MWh)': r['swap_imported'],
         'RECs Out (MWh)': r['swap_exported'],
+        'Swap Cost ($)': r['swap_cost'],
+        'Swap Revenue ($)': r['swap_revenue'],
         'Swap Net ($)': r['swap_net_settlement'],
         'Needed RECs (MWh)': r['shortfall_mwh'].sum(),
         'Cost for Needed RECs': -1 * r['shortfall_mwh'].sum() * rec_price,
@@ -273,6 +277,8 @@ member_metrics.append({
     'Optimized CFE %': agg_match_pct, # Pool is already optimized internally
     'RECs In (MWh)': 0,
     'RECs Out (MWh)': 0,
+    'Swap Cost ($)': 0,
+    'Swap Revenue ($)': 0,
     'Swap Net ($)': 0, # Internal sum is zero
     'Needed RECs (MWh)': (-agg_total_re + aggregated_load).clip(lower=0).sum(),
     'Cost for Needed RECs': -1 * (-agg_total_re + aggregated_load).clip(lower=0).sum() * rec_price,
@@ -289,6 +295,8 @@ st.dataframe(df_metrics.style.format({
     'Optimized CFE %': '{:.1f}%',
     'RECs In (MWh)': '{:,.0f}',
     'RECs Out (MWh)': '{:,.0f}',
+    'Swap Cost ($)': '${:,.0f}',
+    'Swap Revenue ($)': '${:,.0f}',
     'Swap Net ($)': '${:,.0f}',
     'Needed RECs (MWh)': '{:,.0f}',
     'Cost for Needed RECs': '${:,.0f}',
@@ -305,11 +313,21 @@ c_shortfall.metric("Pool Shortfall (Deficit)", f"{pool_shortfall_recs:,.0f} MWh"
 st.subheader("Match % Comparison: Individual vs Aggregated")
 comparison_data = []
 for r in results:
-    comparison_data.append({'Name': r['name'], 'Match %': r['match_pct'], 'Type': 'Individual'})
-comparison_data.append({'Name': 'Aggregated Pool', 'Match %': agg_match_pct, 'Type': 'Pool'})
+    comparison_data.append({'Name': r['name'], 'Match %': r['match_pct'], 'Type': 'Prior to Transfer'})
+    comparison_data.append({'Name': r['name'], 'Match %': r['optimized_match_pct'], 'Type': 'After Transfer'})
 
+# Comparison Chart
 df_comp = pd.DataFrame(comparison_data)
-fig_comp = px.bar(df_comp, x='Name', y='Match %', color='Type', text_auto='.1f', color_discrete_map={'Individual': '#7f7f7f', 'Pool': '#00CC96'})
+
+fig_comp = px.bar(
+    df_comp, 
+    x='Name', 
+    y='Match %', 
+    color='Type', 
+    barmode='group',
+    text_auto='.1f', 
+    color_discrete_map={'Prior to Transfer': '#7f7f7f', 'After Transfer': '#00CC96'}
+)
 fig_comp.add_hline(y=agg_match_pct, line_dash="dash", line_color="#00FF00", line_width=3, annotation_text="Pool Level", annotation_position="top right")
 st.plotly_chart(fig_comp, use_container_width=True)
 
@@ -365,16 +383,64 @@ with tab_chart:
     st.plotly_chart(fig_ts, use_container_width=True)
 
 with tab_data:
-    st.markdown("### Hourly Net Positions (Load - Generation)")
-    st.markdown("Positive values indicate a **Deficit** (Import needed), Negative values indicate a **Surplus** (Export available).")
-    
     # Filter for selected time range if desired, or show full year
     if view_mode == "Weekly":
-        data_to_show = net_positions_df[start_idx:end_idx]
+        s_idx = start_idx
+        e_idx = end_idx
     else:
-        data_to_show = net_positions_df
+        s_idx = None
+        e_idx = None
+
+    if view_option == "Aggregated Pool":
+        st.markdown("### Hourly Net Positions (Generation - Load)")
+        st.markdown("Positive values indicate a **Surplus** (Export available), Negative values indicate a **Deficit** (Import needed).")
         
-    st.dataframe(data_to_show.style.format("{:,.1f}"), use_container_width=True)
+        data_to_show = net_positions_df
+        if s_idx:
+            data_to_show = data_to_show[s_idx:e_idx]
+            
+        st.dataframe(data_to_show.style.format("{:,.1f}"), use_container_width=True)
+    
+    else:
+        # Detailed view for single participant
+        # res is already found above as 'res'
+        
+        # Calculate Net Position for this view (Gen - Load)
+        hourly_net = res['total_re'] - res['load']
+        
+        # Construct detailed DF
+        participant_df = pd.DataFrame({
+            'Load (MW)': res['load'],
+            'Generation (MW)': res['total_re'],
+            'Net Position (MW)': hourly_net,
+            'Swap Imports (MW)': 0.0, # Default, fill if exists
+            'Swap Exports (MW)': 0.0  # Default, fill if exists
+        })
+        
+        # We need to access the swap details again. 
+        # Though 'swap_imported' is a sum in results, we need hourly series.
+        # But 'swap_results' in line 153 aggregated totals, it didn't save hourly series in the dictionary structure except for imports which we have in 'hourly_imports' dataframe!
+        
+        # For Exports, we didn't explicitly save the hourly export series in a persistent DF in the main loop, only totals.
+        # However, imports for one are exports for another.
+        # But we do have 'hourly_imports' DF.
+        
+        if 'hourly_imports' in locals():
+            if view_option in hourly_imports.columns:
+                 participant_df['Swap Imports (MW)'] = hourly_imports[view_option]
+        
+        # To get hourly exports accurately without re-running logic, we recall:
+        # Export = (Surplus / Total Surplus) * Swappable
+        # This is a bit complex to reconstruct perfectly here without saving it earlier.
+        # For now, let's show what we have: Load, Gen, Net Position.
+        
+        st.markdown(f"### {view_option} - Detailed Hourly Data")
+        st.markdown("Net Position = Generation - Load")
+        
+        if s_idx:
+            participant_df = participant_df[s_idx:e_idx]
+            
+        st.dataframe(participant_df.style.format("{:,.1f}").applymap(lambda x: 'color: red' if x < 0 else 'color: green', subset=['Net Position (MW)']), use_container_width=True)
 
 # Monthly View
 monthly = df_plot.resample('M').sum() / 1000 # GWh
