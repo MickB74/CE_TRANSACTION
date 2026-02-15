@@ -408,23 +408,7 @@ def create_pdf(df_in, fig1, fig2):
 
     return pdf.output(dest='S').encode('latin-1')
 
-# Buttons
-if st.sidebar.button("Prepare PDF Report"):
-    # Generate on click to avoid re-running on every reload if expensive
-    try:
-        pdf_bytes = create_pdf(df_metrics, fig_comp, fig_fin)
-        if pdf_bytes:
-            st.sidebar.download_button(
-                label="Download PDF Report",
-                data=pdf_bytes,
-                file_name="portfolio_report.pdf",
-                mime="application/pdf"
-            )
-        else:
-            st.sidebar.error("Could not generate PDF. Please ensure 'fpdf2' is installed.")
-    except Exception as e:
-        st.sidebar.error(f"Error generating PDF: {e}")
-        st.sidebar.info("Note: 'kaleido' is required for chart images.")
+
 
 def to_excel(df_in):
     output = io.BytesIO()
@@ -871,3 +855,21 @@ fig_pos.add_trace(go.Bar(
 ))
 fig_pos.update_layout(title=f"{title} - Hourly REC Position {chart_title_suffix}", xaxis_title="Time", yaxis_title="MW", height=400)
 st.plotly_chart(fig_pos, use_container_width=True)
+
+# --- PDF Export (Moved to end to ensure charts are defined) ---
+if st.sidebar.button("Prepare PDF Report"):
+    # Generate on click to avoid re-running on every reload if expensive
+    try:
+        pdf_bytes = create_pdf(df_metrics, fig_comp, fig_fin)
+        if pdf_bytes:
+            st.sidebar.download_button(
+                label="Download PDF Report",
+                data=pdf_bytes,
+                file_name="portfolio_report.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.sidebar.error("Could not generate PDF. Please ensure 'fpdf2' is installed.")
+    except Exception as e:
+        st.sidebar.error(f"Error generating PDF: {e}")
+        st.sidebar.info("Note: 'kaleido' is required for chart images.")
