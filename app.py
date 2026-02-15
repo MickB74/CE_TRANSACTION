@@ -318,12 +318,18 @@ def to_excel(df_in):
         # Table 1: Overview
         t1_cols = ['Participant', 'Annual Load (MWh)', 'Total Generation (MWh)', 'Volumetric RE %', 'Standalone CFE %']
         df1 = df_in[t1_cols].copy()
+        # Fix percentages for Excel (0-1 scale)
+        df1['Volumetric RE %'] /= 100
+        df1['Standalone CFE %'] /= 100
         
         # Table 2: Swap Financials
         # Calculate Delta
         df_in['Increase/(Decrease)'] = df_in['Optimized CFE %'] - df_in['Standalone CFE %']
         t2_cols = ['Participant', 'RECs In (MWh)', 'RECs Out (MWh)', 'Swap Cost ($)', 'Swap Revenue ($)', 'Swap Net ($)', 'Optimized CFE %', 'Increase/(Decrease)']
         df2 = df_in[t2_cols].copy()
+        # Fix percentages for Excel (0-1 scale)
+        df2['Optimized CFE %'] /= 100
+        df2['Increase/(Decrease)'] /= 100
         
         # Table 3: External Financials
         # Calculate Outside Net
