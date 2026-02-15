@@ -382,6 +382,26 @@ fig_fin.update_traces(textposition='auto')
 fig_fin.update_yaxes(title="Amount ($)")
 st.plotly_chart(fig_fin, use_container_width=True)
 
+# 5. Pool Operator Fees
+st.markdown("### Operator Fees (3%)")
+col1, col2, col3, col4 = st.columns(4)
+
+# Calculate Totals
+total_swap_rev = sum(r['swap_revenue'] for r in results)
+total_external_sales = sum((r['excess_mwh'].sum() - r['swap_exported']) * rec_price for r in results)
+total_market_purchases = sum((r['shortfall_mwh'].sum() - r['swap_imported']) * rec_price for r in results)
+
+# Calculate Fees
+fee_swap = total_swap_rev * 0.03
+fee_external = total_external_sales * 0.03
+fee_market = total_market_purchases * 0.03
+total_fee = fee_swap + fee_external + fee_market
+
+col1.metric("Swap Fee", f"${fee_swap:,.0f}")
+col2.metric("External Sales Fee", f"${fee_external:,.0f}")
+col3.metric("Market Purchase Fee", f"${fee_market:,.0f}")
+col4.metric("Total Operator Revenue", f"${total_fee:,.0f}")
+
 # 3. Detailed View
 st.markdown("---")
 st.subheader("Detailed Analysis")
