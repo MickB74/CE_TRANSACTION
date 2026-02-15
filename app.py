@@ -426,6 +426,19 @@ fig_fin.update_layout(
     )
 )
 
+# Add invisible trace to force secondary axis rendering
+import plotly.graph_objects as go
+if not df_fin.empty:
+    fig_fin.add_trace(go.Scatter(
+        x=df_fin['Name'], 
+        y=df_fin['MWh'], 
+        yaxis='y2', 
+        mode='markers',
+        marker=dict(opacity=0),
+        showlegend=False, 
+        hoverinfo='skip'
+    ))
+
 st.plotly_chart(fig_fin, use_container_width=True)
 
 # 5. Pool Operator Fees
