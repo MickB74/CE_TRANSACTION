@@ -342,11 +342,17 @@ fig_comp.add_hline(y=agg_match_pct, line_dash="dash", line_color="#00FF00", line
 st.plotly_chart(fig_comp, use_container_width=True)
 
 # 4. Swap Financials Chart
-st.subheader("Swap Financials: Paid vs. Received")
+st.subheader("Swap Financials & External Sales")
 financial_data = []
 for r in results:
-    financial_data.append({'Name': r['name'], 'Amount': r['swap_revenue'], 'Type': 'Revenue (Received)'})
-    financial_data.append({'Name': r['name'], 'Amount': -r['swap_cost'], 'Type': 'Cost (Paid)'})
+    # Existing Swap Data
+    financial_data.append({'Name': r['name'], 'Amount': r['swap_revenue'], 'Type': 'Swap Revenue (Received)'})
+    financial_data.append({'Name': r['name'], 'Amount': -r['swap_cost'], 'Type': 'Swap Cost (Paid)'})
+    
+    # New: External Sales (Unused RECs sold to market)
+    unused_mwh = r['excess_mwh'].sum() - r['swap_exported']
+    unused_value = unused_mwh * rec_price
+    financial_data.append({'Name': r['name'], 'Amount': unused_value, 'Type': 'External Sales'})
 
 df_fin = pd.DataFrame(financial_data)
 # Add formatted text column
@@ -359,8 +365,12 @@ fig_fin = px.bar(
     color='Type', 
     text='Text',
     barmode='group',
-    color_discrete_map={'Revenue (Received)': '#00CC96', 'Cost (Paid)': '#EF553B'},
-    title="Swap Financial Impact"
+    color_discrete_map={
+        'Swap Revenue (Received)': '#00CC96', 
+        'Swap Cost (Paid)': '#EF553B',
+        'External Sales': '#AB63FA'
+    },
+    title="Financial Impact: Swaps vs. External Sales"
 )
 fig_fin.update_traces(textposition='auto')
 fig_fin.update_yaxes(title="Amount ($)")
