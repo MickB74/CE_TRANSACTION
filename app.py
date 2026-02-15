@@ -294,9 +294,13 @@ st.sidebar.header("3. Exports")
 # --- Export Logic ---
 import io
 import tempfile
-from fpdf import FPDF
 
 def create_pdf(df_in, fig1, fig2):
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return None
+
     class PDF(FPDF):
         def header(self):
             self.set_font('Arial', 'B', 12)
@@ -407,13 +411,20 @@ def create_pdf(df_in, fig1, fig2):
 # Buttons
 if st.sidebar.button("Prepare PDF Report"):
     # Generate on click to avoid re-running on every reload if expensive
-    pdf_bytes = create_pdf(df_metrics, fig_comp, fig_fin)
-    st.sidebar.download_button(
-        label="Download PDF Report",
-        data=pdf_bytes,
-        file_name="portfolio_report.pdf",
-        mime="application/pdf"
-    )
+    try:
+        pdf_bytes = create_pdf(df_metrics, fig_comp, fig_fin)
+        if pdf_bytes:
+            st.sidebar.download_button(
+                label="Download PDF Report",
+                data=pdf_bytes,
+                file_name="portfolio_report.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.sidebar.error("Could not generate PDF. Please ensure 'fpdf2' is installed.")
+    except Exception as e:
+        st.sidebar.error(f"Error generating PDF: {e}")
+        st.sidebar.info("Note: 'kaleido' is required for chart images.")
 
 def to_excel(df_in):
     output = io.BytesIO()
