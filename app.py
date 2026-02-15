@@ -398,9 +398,16 @@ fee_market = total_market_purchases * 0.03
 total_fee = fee_swap + fee_external + fee_market
 
 col1.metric("Swap Fee", f"${fee_swap:,.0f}")
+col1.caption(f"${total_swap_rev:,.0f} × 3%")
+
 col2.metric("External Sales Fee", f"${fee_external:,.0f}")
+col2.caption(f"${total_external_sales:,.0f} × 3%")
+
 col3.metric("Market Purchase Fee", f"${fee_market:,.0f}")
+col3.caption(f"${total_market_purchases:,.0f} × 3%")
+
 col4.metric("Total Operator Revenue", f"${total_fee:,.0f}")
+col4.caption("Sum of all fees")
 
 # 3. Detailed View
 st.markdown("---")
