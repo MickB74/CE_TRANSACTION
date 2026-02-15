@@ -290,6 +290,109 @@ df_metrics = pd.DataFrame(member_metrics)
 
 st.sidebar.markdown("---")
 st.sidebar.header("3. Exports")
+
+# --- Excel Export Logic ---
+import io
+
+def to_excel(df_in):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        workbook = writer.book
+        worksheet = workbook.add_worksheet('Portfolio Summary')
+        writer.sheets['Portfolio Summary'] = worksheet
+        
+        # Formats
+        header_fmt = workbook.add_format({
+            'bold': True, 'font_color': 'white', 'bg_color': '#4472C4', # Excel Blue
+            'border': 1, 'align': 'center', 'valign': 'vcenter', 'text_wrap': True
+        })
+        row_fmt = workbook.add_format({'border': 1})
+        pool_row_fmt = workbook.add_format({'bold': True, 'border': 1, 'bg_color': '#F2F2F2'})
+        
+        # Number Formats
+        num_fmt = workbook.add_format({'border': 1, 'num_format': '#,##0'})
+        currency_fmt = workbook.add_format({'border': 1, 'num_format': '$#,##0;[Red]($#,##0)'})
+        pct_fmt = workbook.add_format({'border': 1, 'num_format': '0.0%'})
+        
+        # Prepare Dataframes
+        # Table 1: Overview
+        t1_cols = ['Participant', 'Annual Load (MWh)', 'Total Generation (MWh)', 'Volumetric RE %', 'Standalone CFE %']
+        df1 = df_in[t1_cols].copy()
+        
+        # Table 2: Swap Financials
+        # Calculate Delta
+        df_in['Increase/(Decrease)'] = df_in['Optimized CFE %'] - df_in['Standalone CFE %']
+        t2_cols = ['Participant', 'RECs In (MWh)', 'RECs Out (MWh)', 'Swap Cost ($)', 'Swap Revenue ($)', 'Swap Net ($)', 'Optimized CFE %', 'Increase/(Decrease)']
+        df2 = df_in[t2_cols].copy()
+        
+        # Table 3: External Financials
+        # Calculate Outside Net
+        # Note: 'Cost for Needed RECs' is negative in df_in, 'Value of Unused' is positive.
+        # Screenshot implies 'Outside RECs Net' should be Value - Cost.
+        # Let's check the sign of 'Cost for Needed RECs'. Logic: -1 * shortfall * price. So it is negative.
+        # So Net = Value + Cost (e.g. 100 + (-20) = 80).
+        df_in['Outside RECs Net ($)'] = df_in['Value of Unused RECs'] + df_in['Cost for Needed RECs']
+        t3_cols = ['Participant', 'Needed RECs (MWh)', 'Cost for Needed RECs', 'Unused RECs (MWh)', 'Value of Unused RECs', 'Outside RECs Net ($)']
+        df3 = df_in[t3_cols].copy()
+        
+        # Helper to write table
+        def write_table(df, start_row, format_dict):
+            # Write Headers
+            for col_num, value in enumerate(df.columns):
+                worksheet.write(start_row, col_num, value, header_fmt)
+            
+            # Write Data
+            for r_idx, row in df.iterrows():
+                row_num = start_row + 1 + r_idx
+                is_pool = row['Participant'] == 'Aggregated Pool'
+                base_fmt = pool_row_fmt if is_pool else row_fmt
+                
+                for c_idx, col_name in enumerate(df.columns):
+                    val = row[col_name]
+                    
+                    # Determine format based on column name
+                    cell_fmt = base_fmt # Default
+                    if '($)' in col_name or 'Cost' in col_name or 'Value' in col_name or 'Revenue' in col_name:
+                         # Merge base format with currency
+                         cell_fmt = workbook.add_format({'num_format': '$#,##0;[Red]($#,##0)'})
+                    elif '%' in col_name:
+                         cell_fmt = workbook.add_format({'num_format': '0.1%'})
+                    elif 'MWh' in col_name or 'Load' in col_name or 'Generation' in col_name:
+                         cell_fmt = workbook.add_format({'num_format': '#,##0'})
+                    
+                    # Apply borders/bold from base_fmt
+                    if is_pool:
+                        cell_fmt.set_bold()
+                        cell_fmt.set_bg_color('#F2F2F2')
+                    cell_fmt.set_border(1)
+                    
+                    if pd.isna(val):
+                        worksheet.write_blank(row_num, c_idx, None, cell_fmt)
+                    else:
+                        worksheet.write(row_num, c_idx, val, cell_fmt)
+            return start_row + len(df) + 2 # Return next start row
+
+        # Write Tables
+        curr_row = 0
+        curr_row = write_table(df1, curr_row, {})
+        curr_row = write_table(df2, curr_row, {})
+        curr_row = write_table(df3, curr_row, {})
+        
+        # Auto-adjust columns
+        worksheet.set_column(0, 0, 25) # Participant Col
+        worksheet.set_column(1, 8, 18) # Data Cols
+
+    return output.getvalue()
+
+excel_data = to_excel(df_metrics)
+
+st.sidebar.download_button(
+    label="Download Excel Report",
+    data=excel_data,
+    file_name="portfolio_export.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
 st.sidebar.download_button(
     label="Download Portfolio JSON",
     data=df_metrics.to_json(orient='records', indent=2),
