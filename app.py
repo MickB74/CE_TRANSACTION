@@ -280,10 +280,10 @@ member_metrics.append({
     'Swap Cost ($)': sum(r['swap_cost'] for r in results),
     'Swap Revenue ($)': sum(r['swap_revenue'] for r in results),
     'Swap Net ($)': sum(r['swap_net_settlement'] for r in results), # Internal sum is zero
-    'Needed RECs (MWh)': (-agg_total_re + aggregated_load).clip(lower=0).sum(),
-    'Cost for Needed RECs': -1 * (-agg_total_re + aggregated_load).clip(lower=0).sum() * rec_price,
-    'Unused RECs (MWh)': (agg_total_re - aggregated_load).clip(lower=0).sum(),
-    'Value of Unused RECs': (agg_total_re - aggregated_load).clip(lower=0).sum() * rec_price
+    'Needed RECs (MWh)': sum(m['Needed RECs (MWh)'] for m in member_metrics),
+    'Cost for Needed RECs': sum(m['Cost for Needed RECs'] for m in member_metrics),
+    'Unused RECs (MWh)': sum(m['Unused RECs (MWh)'] for m in member_metrics),
+    'Value of Unused RECs': sum(m['Value of Unused RECs'] for m in member_metrics)
 })
 
 df_metrics = pd.DataFrame(member_metrics)
