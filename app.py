@@ -423,6 +423,13 @@ fig_fin.update_layout(
         side="right",
         showgrid=False,
         range=[y_min / rec_price, y_max / rec_price]
+    ),
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="left",
+        x=0
     )
 )
 
