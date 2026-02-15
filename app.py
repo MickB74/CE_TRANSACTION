@@ -291,8 +291,129 @@ df_metrics = pd.DataFrame(member_metrics)
 st.sidebar.markdown("---")
 st.sidebar.header("3. Exports")
 
-# --- Excel Export Logic ---
+# --- Export Logic ---
 import io
+import tempfile
+from fpdf import FPDF
+
+def create_pdf(df_in, fig1, fig2):
+    class PDF(FPDF):
+        def header(self):
+            self.set_font('Arial', 'B', 12)
+            self.cell(0, 10, 'Aggregated Procurement Portfolio Report', 0, 1, 'C')
+            self.ln(5)
+
+    pdf = PDF(orientation='L', unit='mm', format='A4')
+    pdf.add_page()
+    pdf.set_font("Arial", size=10)
+    
+    # Helper to clean data for PDF
+    def clean_text(x):
+        if isinstance(x, (int, float)):
+            return f"{x:,.0f}" if abs(x) > 1 else f"{x:.1%}"
+        return str(x)
+
+    # 1. Tables (Simplified for PDF)
+    # We'll just show the "Overview" and "Financials" as key tables
+    
+    # Overview Table
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(0, 10, "1. Participant Overview", 0, 1)
+    pdf.set_font("Arial", size=8)
+    
+    cols = ['Participant', 'Annual Load (MWh)', 'Total Generation (MWh)', 'Volumetric RE %', 'Standalone CFE %']
+    df_t1 = df_in.copy()
+    # Percentages are raw 0-100 in df_in (Metrics table), wait, in df_metrics creation (line 253), r['volumetric_pct'] is 0-100.
+    # In Excel export we divided by 100. Here we render as strings.
+    
+    # Headers
+    col_width = 50
+    for col in cols:
+        pdf.cell(col_width, 7, col, 1)
+    pdf.ln()
+    
+    # Rows
+    for _, row in df_t1.iterrows():
+        is_pool = row['Participant'] == 'Aggregated Pool'
+        pdf.set_font("Arial", 'B' if is_pool else '', 8)
+        
+        for col in cols:
+            val = row[col]
+            # Format
+            txt = str(val)
+            if isinstance(val, (int, float)):
+                if 'Load' in col or 'Generation' in col:
+                     txt = f"{val:,.0f}"
+                elif '%' in col:
+                     txt = f"{val:.1f}%"
+            
+            pdf.cell(col_width, 7, txt, 1)
+        pdf.ln()
+        
+    pdf.ln(10)
+    
+    # Swap Financials Table
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(0, 10, "2. Swap Financials", 0, 1)
+    pdf.set_font("Arial", size=8)
+    
+    cols2 = ['Participant', 'Swap Cost ($)', 'Swap Revenue ($)', 'Swap Net ($)', 'Optimized CFE %']
+    # Headers
+    for col in cols2:
+        pdf.cell(col_width, 7, col, 1)
+    pdf.ln()
+
+    for _, row in df_t1.iterrows():
+        is_pool = row['Participant'] == 'Aggregated Pool'
+        pdf.set_font("Arial", 'B' if is_pool else '', 8)
+        
+        for col in cols2:
+            val = row[col]
+            txt = str(val)
+            if isinstance(val, (int, float)):
+                if '($)' in col:
+                     txt = f"${val:,.0f}"
+                     if val < 0:
+                         pdf.set_text_color(255, 0, 0)
+                     else:
+                         pdf.set_text_color(0, 0, 0)
+                elif '%' in col:
+                     txt = f"{val:.1f}%"
+                     pdf.set_text_color(0, 0, 0)
+            
+            pdf.cell(col_width, 7, txt, 1)
+            pdf.set_text_color(0, 0, 0) # Reset
+        pdf.ln()
+
+    # 2. Charts
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(0, 10, "3. Visual Analysis", 0, 1)
+    
+    # Save charts to temp
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp1, \
+         tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp2:
+         
+        # Fix: Kaleido image generation
+        # Sometimes transparency creates issues in PDF, set bg to white
+        fig1.write_image(tmp1.name, width=800, height=400, scale=2)
+        fig2.write_image(tmp2.name, width=800, height=400, scale=2)
+        
+        pdf.image(tmp1.name, x=10, y=30, w=260)
+        pdf.image(tmp2.name, x=10, y=110, w=260)
+
+    return pdf.output(dest='S').encode('latin-1')
+
+# Buttons
+if st.sidebar.button("Prepare PDF Report"):
+    # Generate on click to avoid re-running on every reload if expensive
+    pdf_bytes = create_pdf(df_metrics, fig_comp, fig_fin)
+    st.sidebar.download_button(
+        label="Download PDF Report",
+        data=pdf_bytes,
+        file_name="portfolio_report.pdf",
+        mime="application/pdf"
+    )
 
 def to_excel(df_in):
     output = io.BytesIO()
