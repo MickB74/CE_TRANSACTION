@@ -339,15 +339,20 @@ for r in results:
     financial_data.append({'Name': r['name'], 'Amount': -r['swap_cost'], 'Type': 'Cost (Paid)'})
 
 df_fin = pd.DataFrame(financial_data)
+# Add formatted text column
+df_fin['Text'] = df_fin['Amount'].apply(lambda x: f"${x:,.0f}")
+
 fig_fin = px.bar(
     df_fin, 
     x='Name', 
     y='Amount', 
     color='Type', 
-    text_auto='$.0f', 
+    text='Text',
+    barmode='group',
     color_discrete_map={'Revenue (Received)': '#00CC96', 'Cost (Paid)': '#EF553B'},
     title="Swap Financial Impact"
 )
+fig_fin.update_traces(textposition='auto')
 fig_fin.update_yaxes(title="Amount ($)")
 st.plotly_chart(fig_fin, use_container_width=True)
 
