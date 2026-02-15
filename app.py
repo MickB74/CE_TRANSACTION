@@ -354,6 +354,11 @@ for r in results:
     unused_value = unused_mwh * rec_price
     financial_data.append({'Name': r['name'], 'Amount': unused_value, 'Type': 'External Sales'})
 
+    # New: Market Purchase (Cost to buy remaining RECs to reach 100%)
+    needed_mwh = r['shortfall_mwh'].sum() - r['swap_imported']
+    market_cost = needed_mwh * rec_price
+    financial_data.append({'Name': r['name'], 'Amount': -market_cost, 'Type': 'Market Purchase (To 100%)'})
+
 df_fin = pd.DataFrame(financial_data)
 # Add formatted text column
 df_fin['Text'] = df_fin['Amount'].apply(lambda x: f"${x:,.0f}")
@@ -368,9 +373,10 @@ fig_fin = px.bar(
     color_discrete_map={
         'Swap Revenue (Received)': '#00CC96', 
         'Swap Cost (Paid)': '#EF553B',
-        'External Sales': '#AB63FA'
+        'External Sales': '#AB63FA',
+        'Market Purchase (To 100%)': '#FFA15A'
     },
-    title="Financial Impact: Swaps vs. External Sales"
+    title="Financial Impact: Swaps, External Sales & Market Buys"
 )
 fig_fin.update_traces(textposition='auto')
 fig_fin.update_yaxes(title="Amount ($)")
