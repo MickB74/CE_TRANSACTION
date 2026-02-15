@@ -409,20 +409,19 @@ fig_fin.update_layout(
         title="Volume (RECs)",
         overlaying="y",
         side="right",
-        showgrid=False,
-        scaleanchor="y",
-        scaleratio=rec_price
+        showgrid=False
     )
 )
 
-# Add invisible trace to force secondary axis rendering
+# Add invisible trace to force secondary axis rendering and auto-scaling
 import plotly.graph_objects as go
 if not df_fin.empty:
     fig_fin.add_trace(go.Scatter(
-        x=[df_fin['Name'][0]], 
-        y=[0], 
+        x=df_fin['Name'], 
+        y=df_fin['MWh'], 
         yaxis='y2', 
-        opacity=0, 
+        mode='markers',
+        marker=dict(opacity=0),
         showlegend=False, 
         hoverinfo='skip'
     ))
