@@ -342,26 +342,48 @@ fig_comp.add_hline(y=agg_match_pct, line_dash="dash", line_color="#00FF00", line
 st.plotly_chart(fig_comp, use_container_width=True)
 
 # 4. Swap Financials Chart
+# 4. Swap Financials Chart
 st.subheader("Swap Financials & External Sales")
 financial_data = []
 for r in results:
     # Existing Swap Data
-    financial_data.append({'Name': r['name'], 'Amount': r['swap_revenue'], 'Type': 'Swap Revenue (Received)'})
-    financial_data.append({'Name': r['name'], 'Amount': -r['swap_cost'], 'Type': 'Swap Cost (Paid)'})
+    financial_data.append({
+        'Name': r['name'], 
+        'Amount': r['swap_revenue'], 
+        'Type': 'Swap Revenue (Received)',
+        'MWh': r['swap_revenue'] / rec_price if rec_price else 0
+    })
+    financial_data.append({
+        'Name': r['name'], 
+        'Amount': -r['swap_cost'], 
+        'Type': 'Swap Cost (Paid)',
+        'MWh': -r['swap_cost'] / rec_price if rec_price else 0
+    })
     
     # New: External Sales (Unused RECs sold to market)
     unused_mwh = r['excess_mwh'].sum() - r['swap_exported']
     unused_value = unused_mwh * rec_price
-    financial_data.append({'Name': r['name'], 'Amount': unused_value, 'Type': 'External Sales'})
+    financial_data.append({
+        'Name': r['name'], 
+        'Amount': unused_value, 
+        'Type': 'External Sales',
+        'MWh': unused_mwh
+    })
 
     # New: Market Purchase (Cost to buy remaining RECs to reach 100%)
     needed_mwh = r['shortfall_mwh'].sum() - r['swap_imported']
     market_cost = needed_mwh * rec_price
-    financial_data.append({'Name': r['name'], 'Amount': -market_cost, 'Type': 'Market Purchase (To 100%)'})
+    financial_data.append({
+        'Name': r['name'], 
+        'Amount': -market_cost, 
+        'Type': 'Market Purchase (To 100%)',
+        'MWh': -needed_mwh
+    })
 
 df_fin = pd.DataFrame(financial_data)
 # Add formatted text column
 df_fin['Text'] = df_fin['Amount'].apply(lambda x: f"${x:,.0f}")
+df_fin['MWh Text'] = df_fin['MWh'].apply(lambda x: f"{x:,.0f} RECs")
 
 fig_fin = px.bar(
     df_fin, 
@@ -369,6 +391,7 @@ fig_fin = px.bar(
     y='Amount', 
     color='Type', 
     text='Text',
+    hover_data=['MWh'],
     barmode='group',
     color_discrete_map={
         'Swap Revenue (Received)': '#00CC96', 
@@ -380,6 +403,17 @@ fig_fin = px.bar(
 )
 fig_fin.update_traces(textposition='auto')
 fig_fin.update_yaxes(title="Amount ($)")
+# Add Secondary Y-Axis linked to price
+fig_fin.update_layout(
+    yaxis2=dict(
+        title="Volume (RECs)",
+        overlaying="y",
+        side="right",
+        showgrid=False,
+        scaleanchor="y",
+        scaleratio=rec_price
+    )
+)
 st.plotly_chart(fig_fin, use_container_width=True)
 
 # 5. Pool Operator Fees
