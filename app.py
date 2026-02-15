@@ -401,30 +401,30 @@ fig_fin = px.bar(
     },
     title="Financial Impact: Swaps, External Sales & Market Buys"
 )
-fig_fin.update_traces(textposition='auto')
-fig_fin.update_yaxes(title="Amount ($)")
-# Add Secondary Y-Axis linked to price
+# Determine axis ranges to align Dollars and MWh
+y_min = df_fin['Amount'].min()
+y_max = df_fin['Amount'].max()
+# Add 10% padding
+if y_min < 0: y_min *= 1.1
+else: y_min *= 0.9
+
+if y_max > 0: y_max *= 1.1
+else: y_max *= 0.9
+
+# Add Secondary Y-Axis linked to price with explicit ranges
 fig_fin.update_layout(
+    yaxis=dict(
+        title="Amount ($)",
+        range=[y_min, y_max]
+    ),
     yaxis2=dict(
         title="Volume (RECs)",
         overlaying="y",
         side="right",
-        showgrid=False
+        showgrid=False,
+        range=[y_min / rec_price, y_max / rec_price]
     )
 )
-
-# Add invisible trace to force secondary axis rendering and auto-scaling
-import plotly.graph_objects as go
-if not df_fin.empty:
-    fig_fin.add_trace(go.Scatter(
-        x=df_fin['Name'], 
-        y=df_fin['MWh'], 
-        yaxis='y2', 
-        mode='markers',
-        marker=dict(opacity=0),
-        showlegend=False, 
-        hoverinfo='skip'
-    ))
 
 st.plotly_chart(fig_fin, use_container_width=True)
 
