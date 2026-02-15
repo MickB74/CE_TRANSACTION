@@ -477,26 +477,26 @@ def to_excel(df_in):
             for r_idx, row in df.iterrows():
                 row_num = start_row + 1 + r_idx
                 is_pool = row['Participant'] == 'Aggregated Pool'
-                base_fmt = pool_row_fmt if is_pool else row_fmt
                 
                 for c_idx, col_name in enumerate(df.columns):
                     val = row[col_name]
                     
-                    # Determine format based on column name
-                    cell_fmt = base_fmt # Default
+                    # Determine number format
+                    n_fmt = 'General'
                     if '($)' in col_name or 'Cost' in col_name or 'Value' in col_name or 'Revenue' in col_name:
-                         # Merge base format with currency
-                         cell_fmt = workbook.add_format({'num_format': '$#,##0;[Red]($#,##0)'})
+                         n_fmt = '$#,##0;[Red]($#,##0)'
                     elif '%' in col_name:
-                         cell_fmt = workbook.add_format({'num_format': '0.1%'})
+                         n_fmt = '0.1%'
                     elif 'MWh' in col_name or 'Load' in col_name or 'Generation' in col_name:
-                         cell_fmt = workbook.add_format({'num_format': '#,##0'})
+                         n_fmt = '#,##0;[Red]-#,##0'
                     
-                    # Apply borders/bold from base_fmt
+                    # Create full format object
+                    props = {'border': 1, 'num_format': n_fmt}
                     if is_pool:
-                        cell_fmt.set_bold()
-                        cell_fmt.set_bg_color('#F2F2F2')
-                    cell_fmt.set_border(1)
+                        props['bold'] = True
+                        props['bg_color'] = '#F2F2F2'
+                    
+                    cell_fmt = workbook.add_format(props)
                     
                     if pd.isna(val):
                         worksheet.write_blank(row_num, c_idx, None, cell_fmt)
