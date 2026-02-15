@@ -262,8 +262,8 @@ for r in results:
         'Swap Cost ($)': r['swap_cost'],
         'Swap Revenue ($)': r['swap_revenue'],
         'Swap Net ($)': r['swap_net_settlement'],
-        'Needed RECs (MWh)': r['shortfall_mwh'].sum(),
-        'Cost for Needed RECs': -1 * r['shortfall_mwh'].sum() * rec_price,
+        'Needed RECs (MWh)': r['shortfall_mwh'].sum() - r['swap_imported'],
+        'Cost for Needed RECs': -1 * (r['shortfall_mwh'].sum() - r['swap_imported']) * rec_price,
         'Unused RECs (MWh)': r['excess_mwh'].sum() - r['swap_exported'],
         'Value of Unused RECs': (r['excess_mwh'].sum() - r['swap_exported']) * rec_price
     })
