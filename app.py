@@ -21,10 +21,10 @@ st.sidebar.header("1. Define Participants")
 # Initialize session state for companies if not exists
 if 'companies' not in st.session_state:
     st.session_state.companies = [
-        {'name': 'Tech Corp', 'demand': 150000, 'profile': 'Data Center', 'solar_mwh': 110000, 'wind_mwh': 45000}, # Total ~155k
-        {'name': 'City Hospital', 'demand': 40000, 'profile': 'Health Care', 'solar_mwh': 25000, 'wind_mwh': 20000}, # Total ~45k
-        {'name': 'Mega Mall', 'demand': 25000, 'profile': 'Retail', 'solar_mwh': 30000, 'wind_mwh': 0}, # Total ~30k
-        {'name': 'Heavy Industry', 'demand': 200000, 'profile': 'Industrial', 'solar_mwh': 80000, 'wind_mwh': 160000} # Total ~240k
+        {'name': 'Data Center Tech Corp', 'demand': 200000, 'profile': 'Data Center', 'solar_mwh': 200000, 'wind_mwh': 110000}, # Total 310k (155%)
+        {'name': 'Hospital Network', 'demand': 100000, 'profile': 'Health Care', 'solar_mwh': 50000, 'wind_mwh': 50000}, # Total 100k (100%)
+        {'name': 'REIT For Malls', 'demand': 65000, 'profile': 'Retail', 'solar_mwh': 55000, 'wind_mwh': 0}, # Total 55k (85%)
+        {'name': 'Heavy Industry', 'demand': 200000, 'profile': 'Industrial', 'solar_mwh': 80000, 'wind_mwh': 150000} # Total 230k (115%)
     ]
 
 def add_company():
@@ -275,11 +275,11 @@ member_metrics.append({
     'Volumetric RE %': (agg_total_re.sum() / aggregated_load.sum()) * 100,
     'Standalone CFE %': agg_match_pct,
     'Optimized CFE %': agg_match_pct, # Pool is already optimized internally
-    'RECs In (MWh)': 0,
-    'RECs Out (MWh)': 0,
-    'Swap Cost ($)': 0,
-    'Swap Revenue ($)': 0,
-    'Swap Net ($)': 0, # Internal sum is zero
+    'RECs In (MWh)': sum(r['swap_imported'] for r in results),
+    'RECs Out (MWh)': sum(r['swap_exported'] for r in results),
+    'Swap Cost ($)': sum(r['swap_cost'] for r in results),
+    'Swap Revenue ($)': sum(r['swap_revenue'] for r in results),
+    'Swap Net ($)': sum(r['swap_net_settlement'] for r in results), # Internal sum is zero
     'Needed RECs (MWh)': (-agg_total_re + aggregated_load).clip(lower=0).sum(),
     'Cost for Needed RECs': -1 * (-agg_total_re + aggregated_load).clip(lower=0).sum() * rec_price,
     'Unused RECs (MWh)': (agg_total_re - aggregated_load).clip(lower=0).sum(),
@@ -330,6 +330,26 @@ fig_comp = px.bar(
 )
 fig_comp.add_hline(y=agg_match_pct, line_dash="dash", line_color="#00FF00", line_width=3, annotation_text="Pool Level", annotation_position="top right")
 st.plotly_chart(fig_comp, use_container_width=True)
+
+# 4. Swap Financials Chart
+st.subheader("Swap Financials: Paid vs. Received")
+financial_data = []
+for r in results:
+    financial_data.append({'Name': r['name'], 'Amount': r['swap_revenue'], 'Type': 'Revenue (Received)'})
+    financial_data.append({'Name': r['name'], 'Amount': -r['swap_cost'], 'Type': 'Cost (Paid)'})
+
+df_fin = pd.DataFrame(financial_data)
+fig_fin = px.bar(
+    df_fin, 
+    x='Name', 
+    y='Amount', 
+    color='Type', 
+    text_auto='$.0f', 
+    color_discrete_map={'Revenue (Received)': '#00CC96', 'Cost (Paid)': '#EF553B'},
+    title="Swap Financial Impact"
+)
+fig_fin.update_yaxes(title="Amount ($)")
+st.plotly_chart(fig_fin, use_container_width=True)
 
 # 3. Detailed View
 st.markdown("---")
