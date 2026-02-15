@@ -327,8 +327,6 @@ def create_pdf(df_in, fig1, fig2):
     
     cols = ['Participant', 'Annual Load (MWh)', 'Total Generation (MWh)', 'Volumetric RE %', 'Standalone CFE %']
     df_t1 = df_in.copy()
-    # Percentages are raw 0-100 in df_in (Metrics table), wait, in df_metrics creation (line 253), r['volumetric_pct'] is 0-100.
-    # In Excel export we divided by 100. Here we render as strings.
     
     # Headers
     col_width = 50
@@ -389,24 +387,36 @@ def create_pdf(df_in, fig1, fig2):
             pdf.set_text_color(0, 0, 0) # Reset
         pdf.ln()
 
-    # 2. Charts
+    # 2. Charts (with Error Handling)
     pdf.add_page()
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "3. Visual Analysis", 0, 1)
     
-    # Save charts to temp
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp1, \
-         tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp2:
-         
-        # Fix: Kaleido image generation
-        # Sometimes transparency creates issues in PDF, set bg to white
-        fig1.write_image(tmp1.name, width=800, height=400, scale=2)
-        fig2.write_image(tmp2.name, width=800, height=400, scale=2)
+    chart_paths = []
+    try:
+        # Save charts to temp
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp1:
+             fig1.write_image(tmp1.name, width=800, height=400, scale=2)
+             chart_paths.append(tmp1.name)
         
-        pdf.image(tmp1.name, x=10, y=30, w=260)
-        pdf.image(tmp2.name, x=10, y=110, w=260)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp2:
+             fig2.write_image(tmp2.name, width=800, height=400, scale=2)
+             chart_paths.append(tmp2.name)
 
-    return pdf.output(dest='S').encode('latin-1')
+        # Embed
+        if len(chart_paths) >= 2:
+            pdf.image(chart_paths[0], x=10, y=30, w=260)
+            pdf.image(chart_paths[1], x=10, y=110, w=260)
+            
+    except Exception as e:
+        print(f"Chart generation failed: {e}")
+        pdf.set_font("Arial", 'I', 10) 
+        pdf.set_text_color(255, 0, 0)
+        pdf.cell(0, 10, f"Error generating charts: {e}", 0, 1)
+        pdf.cell(0, 10, "Please install 'kaleido' (v0.2.1 recommended) to enable chart export.", 0, 1)
+        pdf.set_text_color(0, 0, 0)
+
+    return bytes(pdf.output(dest='S'))
 
 
 
