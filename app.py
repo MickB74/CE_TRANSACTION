@@ -288,8 +288,9 @@ member_metrics.append({
 
 df_metrics = pd.DataFrame(member_metrics)
 
-# CSV/JSON Export
-st.download_button(
+st.sidebar.markdown("---")
+st.sidebar.header("3. Exports")
+st.sidebar.download_button(
     label="Download Portfolio JSON",
     data=df_metrics.to_json(orient='records', indent=2),
     file_name="portfolio_summary.json",
