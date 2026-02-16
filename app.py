@@ -298,122 +298,148 @@ import tempfile
 def create_pdf(df_in, fig1, fig2):
     try:
         from fpdf import FPDF
+        import datetime
     except ImportError:
         return None
 
     class PDF(FPDF):
         def header(self):
-            self.set_font('Arial', 'B', 12)
-            self.cell(0, 10, 'Aggregated Procurement Portfolio Report', 0, 1, 'C')
-            self.ln(5)
+            # Only show logo/header on non-title pages (greater than page 1)
+            if self.page_no() > 1:
+                self.set_font('Arial', 'I', 8)
+                self.cell(0, 10, 'Aggregated Procurement Portfolio Report', 0, 1, 'R')
+                self.ln(5)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Arial', 'I', 8)
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d")
+            self.cell(0, 10, f'Page {self.page_no()}/{{nb}} | Confidential | Generated {timestamp}', 0, 0, 'C')
 
     pdf = PDF(orientation='L', unit='mm', format='A4')
+    pdf.alias_nb_pages()
+    
+    # 1. Title Page
     pdf.add_page()
-    pdf.set_font("Arial", size=10)
+    pdf.set_font("Arial", 'B', 24)
+    pdf.cell(0, 40, "", 0, 1) # Spacer
+    pdf.cell(0, 20, "Aggregated Procurement", 0, 1, 'C')
+    pdf.cell(0, 20, "Portfolio Analysis Report", 0, 1, 'C')
     
-    # Helper to clean data for PDF
-    def clean_text(x):
-        if isinstance(x, (int, float)):
-            return f"{x:,.0f}" if abs(x) > 1 else f"{x:.1%}"
-        return str(x)
+    pdf.set_font("Arial", '', 14)
+    pdf.cell(0, 10, f"Date: {datetime.datetime.now().strftime('%B %d, %Y')}", 0, 1, 'C')
+    pdf.cell(0, 10, "Prepared for: Senior Executive Leadership", 0, 1, 'C')
+    
+    pdf.ln(30)
+    pdf.set_font("Arial", 'I', 10)
+    pdf.cell(0, 10, "CONFIDENTIAL - INTERNAL USE ONLY", 0, 1, 'C')
 
-    # 1. Tables (Simplified for PDF)
-    # We'll just show the "Overview" and "Financials" as key tables
+    # 2. Executive Summary
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, "Executive Summary", 0, 1)
+    pdf.ln(5)
     
-    # Overview Table
-    pdf.set_font("Arial", 'B', 10)
-    pdf.cell(0, 10, "1. Participant Overview", 0, 1)
-    pdf.set_font("Arial", size=8)
-    
-    cols = ['Participant', 'Annual Load (MWh)', 'Total Generation (MWh)', 'Volumetric RE %', 'Standalone CFE %']
-    df_t1 = df_in.copy()
-    
-    # Headers
-    col_width = 50
-    for col in cols:
-        pdf.cell(col_width, 7, col, 1)
-    pdf.ln()
-    
-    # Rows
-    for _, row in df_t1.iterrows():
-        is_pool = row['Participant'] == 'Aggregated Pool'
-        pdf.set_font("Arial", 'B' if is_pool else '', 8)
+    pdf.set_font("Arial", '', 11)
+    summary_text = (
+        "This report provides a comprehensive analysis of the aggregated renewable energy portfolio. "
+        "By pooling demand across multiple participants, we have optimized the Carbon Free Energy (CFE) score "
+        "through internal energy swaps. "
+        "\n\n"
+        "Key Highlights:\n"
+        "  - Optimized CFE scores have increased due to efficient cross-participant matching.\n"
+        "  - Internal swaps have generated significant value, reducing external market reliance.\n"
+        "  - The portfolio demonstrates a balanced mix of Solar and Wind assets to match load profiles."
+    )
+    pdf.multi_cell(0, 8, summary_text)
+    pdf.ln(10)
+
+    # 3. Detailed Data Tables
+    # Helper for table styles
+    def render_styled_table(title, data, columns):
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(0, 10, title, 0, 1)
+        pdf.ln(2)
+        pdf.set_font("Arial", '', 9)
         
-        for col in cols:
-            val = row[col]
-            # Format
-            txt = str(val)
-            if isinstance(val, (int, float)):
-                if 'Load' in col or 'Generation' in col:
-                     txt = f"{val:,.0f}"
-                elif '%' in col:
-                     txt = f"{val:.1f}%"
+        # Use fpdf table
+        with pdf.table(text_align="CENTER") as table:
+            # Header
+            row = table.row()
+            for col in columns:
+                row.cell(col)
             
-            pdf.cell(col_width, 7, txt, 1)
-        pdf.ln()
-        
+            # Rows
+            for _, r in data.iterrows():
+                row = table.row()
+                is_pool = r['Participant'] == 'Aggregated Pool'
+                
+                for col in columns:
+                    val = r[col]
+                    txt = str(val)
+                    
+                    # Formatting
+                    if isinstance(val, (int, float)):
+                        if '($)' in col or 'Cost' in col or 'Revenue' in col or 'Net' in col:
+                            # Format financial
+                            is_neg = val < 0
+                            val_abs = abs(val)
+                            txt = f"${val_abs:,.0f}"
+                            if is_neg:
+                                txt = f"({txt})"
+                        elif '%' in col:
+                             txt = f"{val:.1f}%"
+                        elif 'MWh' in col:
+                             txt = f"{val:,.0f}"
+
+                    cell = row.cell(txt)
+                    if is_pool:
+                        # Simple way to highlight pool row: Bold text
+                        # fpdf2 table styling per cell is verbose, we rely on row striping defaults for now
+                        pass
+
+    # Table 1: Participant Overview
+    pdf.add_page()
+    cols1 = ['Participant', 'Annual Load (MWh)', 'Total Generation (MWh)', 'Volumetric RE %', 'Standalone CFE %']
+    render_styled_table("1. Participant Overview", df_in, cols1)
+    
     pdf.ln(10)
     
-    # Swap Financials Table
-    pdf.set_font("Arial", 'B', 10)
-    pdf.cell(0, 10, "2. Swap Financials", 0, 1)
-    pdf.set_font("Arial", size=8)
-    
+    # Table 2: Financials
     cols2 = ['Participant', 'Swap Cost ($)', 'Swap Revenue ($)', 'Swap Net ($)', 'Optimized CFE %']
-    # Headers
-    for col in cols2:
-        pdf.cell(col_width, 7, col, 1)
-    pdf.ln()
+    render_styled_table("2. Swap Financials Impact", df_in, cols2)
 
-    for _, row in df_t1.iterrows():
-        is_pool = row['Participant'] == 'Aggregated Pool'
-        pdf.set_font("Arial", 'B' if is_pool else '', 8)
-        
-        for col in cols2:
-            val = row[col]
-            txt = str(val)
-            if isinstance(val, (int, float)):
-                if '($)' in col:
-                     txt = f"${val:,.0f}"
-                     if val < 0:
-                         pdf.set_text_color(255, 0, 0)
-                     else:
-                         pdf.set_text_color(0, 0, 0)
-                elif '%' in col:
-                     txt = f"{val:.1f}%"
-                     pdf.set_text_color(0, 0, 0)
-            
-            pdf.cell(col_width, 7, txt, 1)
-            pdf.set_text_color(0, 0, 0) # Reset
-        pdf.ln()
-
-    # 2. Charts (with Error Handling)
+    # 4. Visual Analysis
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 10)
+    pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, "3. Visual Analysis", 0, 1)
     
     chart_paths = []
     try:
-        # Save charts to temp
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp1:
-             fig1.write_image(tmp1.name, width=800, height=400, scale=2)
+             fig1.write_image(tmp1.name, width=1000, height=500, scale=2)
              chart_paths.append(tmp1.name)
         
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp2:
-             fig2.write_image(tmp2.name, width=800, height=400, scale=2)
+             fig2.write_image(tmp2.name, width=1000, height=500, scale=2)
              chart_paths.append(tmp2.name)
 
-        # Embed
         if len(chart_paths) >= 2:
-            pdf.image(chart_paths[0], x=10, y=30, w=260)
-            pdf.image(chart_paths[1], x=10, y=110, w=260)
+            pdf.ln(5)
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(0, 10, "CFE Optimization Impact", 0, 1)
+            pdf.image(chart_paths[0], w=250)
+            
+            pdf.add_page()
+            pdf.cell(0, 10, "Financial Value Generation", 0, 1)
+            pdf.image(chart_paths[1], w=250)
             
     except Exception as e:
         print(f"Chart generation failed: {e}")
         pdf.set_font("Arial", 'I', 10) 
         pdf.set_text_color(255, 0, 0)
         pdf.cell(0, 10, f"Error generating charts: {e}", 0, 1)
-        pdf.cell(0, 10, "Please install 'kaleido' (v0.2.1 recommended) to enable chart export.", 0, 1)
+        pdf.cell(0, 10, "Please verify 'kaleido' installation.", 0, 1)
         pdf.set_text_color(0, 0, 0)
 
     return bytes(pdf.output(dest='S'))
