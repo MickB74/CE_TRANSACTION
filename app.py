@@ -453,6 +453,9 @@ def to_excel(df_in):
         worksheet = workbook.add_worksheet('Portfolio Summary')
         writer.sheets['Portfolio Summary'] = worksheet
         
+        # Hide gridlines (screen)
+        worksheet.hide_gridlines(2)
+        
         # Formats
         header_fmt = workbook.add_format({
             'bold': True, 'font_color': 'white', 'bg_color': '#4472C4', # Excel Blue
