@@ -690,7 +690,7 @@ for r in results:
 
 df_fin = pd.DataFrame(financial_data)
 # Add formatted text column
-df_fin['Text'] = df_fin['Amount'].apply(lambda x: f"${x:,.0f}")
+df_fin['Text'] = df_fin['Amount'].apply(lambda x: f"${x/1000:,.1f}k" if abs(x) >= 1000 else f"${x:,.0f}")
 df_fin['MWh Text'] = df_fin['MWh'].apply(lambda x: f"{x:,.0f} RECs")
 
 fig_fin = px.bar(
@@ -729,7 +729,7 @@ fig_fin.update_layout(
         title="Volume (RECs)",
         overlaying="y",
         side="right",
-        showgrid=False,
+        showgrid=True,
         range=[y_min / rec_price, y_max / rec_price]
     ),
     legend=dict(
