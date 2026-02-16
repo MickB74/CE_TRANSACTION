@@ -785,6 +785,37 @@ col3.caption(f"${total_market_purchases:,.0f} × 3%")
 col4.metric("Total Operator Revenue", f"${total_fee:,.0f}")
 col4.caption("Sum of all fees")
 
+# 6. Position Change Chart
+st.subheader("Net REC Position Change (Long/Short)")
+pos_data = []
+
+for r in results:
+    # Net Position = Total Gen - Total Load
+    # If positive, Long (Surplus). If negative, Short (Deficit).
+    initial_net = r['total_gen'] - r['total_demand']
+    
+    # Post Swap = Initial + Imports - Exports
+    final_net = initial_net + r['swap_imported'] - r['swap_exported']
+    
+    pos_data.append({'Name': r['name'], 'MWh': initial_net, 'Status': 'Before Swaps'})
+    pos_data.append({'Name': r['name'], 'MWh': final_net, 'Status': 'After Swaps'})
+
+df_pos_change = pd.DataFrame(pos_data)
+
+fig_pos_change = px.bar(
+    df_pos_change, 
+    x='Name', 
+    y='MWh', 
+    color='Status', 
+    barmode='group',
+    title="Net Position Impact: Before vs After Swaps",
+    text_auto=',.0f',
+    color_discrete_map={'Before Swaps': '#bababa', 'After Swaps': '#3366CC'}
+)
+fig_pos_change.update_layout(yaxis_title="Net Position (MWh) (+Long / -Short)")
+fig_pos_change.add_hline(y=0, line_width=1, line_color="black")
+st.plotly_chart(fig_pos_change, use_container_width=True)
+
 # 3. Detailed View
 st.markdown("---")
 st.subheader("Detailed Analysis")
