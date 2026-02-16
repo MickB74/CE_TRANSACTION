@@ -902,7 +902,13 @@ st.plotly_chart(fig_pos, use_container_width=True)
 if st.sidebar.button("Prepare PDF Report"):
     # Generate on click to avoid re-running on every reload if expensive
     try:
-        pdf_bytes = create_pdf(df_metrics, fig_comp, fig_fin)
+        agg_data = {
+            'load': aggregated_load,
+            'solar': aggregated_solar,
+            'wind': aggregated_wind,
+            'total_re': agg_total_re
+        }
+        pdf_bytes = create_pdf(df_metrics, fig_comp, fig_fin, agg_data)
         if pdf_bytes:
             st.sidebar.download_button(
                 label="Download PDF Report",
