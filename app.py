@@ -730,6 +730,8 @@ fig_fin.update_layout(
         overlaying="y",
         side="right",
         showgrid=True,
+        gridcolor='rgba(200, 200, 200, 0.25)',
+        griddash='dot',
         range=[y_min / rec_price, y_max / rec_price]
     ),
     legend=dict(
