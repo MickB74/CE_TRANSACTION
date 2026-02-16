@@ -453,6 +453,8 @@ def to_excel(df_in):
         df_in['Increase/(Decrease)'] = df_in['Optimized CFE %'] - df_in['Standalone CFE %']
         t2_cols = ['Participant', 'RECs In (MWh)', 'RECs Out (MWh)', 'Swap Cost ($)', 'Swap Revenue ($)', 'Swap Net ($)', 'Optimized CFE %', 'Increase/(Decrease)']
         df2 = df_in[t2_cols].copy()
+        # Make Swap Cost negative
+        df2['Swap Cost ($)'] *= -1
         # Fix percentages for Excel (0-1 scale)
         df2['Optimized CFE %'] /= 100
         df2['Increase/(Decrease)'] /= 100
