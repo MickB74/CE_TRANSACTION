@@ -456,15 +456,16 @@ def to_excel(df_in):
         # Formats
         header_fmt = workbook.add_format({
             'bold': True, 'font_color': 'white', 'bg_color': '#4472C4', # Excel Blue
-            'border': 1, 'align': 'center', 'valign': 'vcenter', 'text_wrap': True
+            'border': 1, 'align': 'center', 'valign': 'vcenter', 'text_wrap': True,
+            'font_name': 'Open Sans'
         })
-        row_fmt = workbook.add_format({'border': 1})
-        pool_row_fmt = workbook.add_format({'bold': True, 'border': 1, 'bg_color': '#F2F2F2'})
+        row_fmt = workbook.add_format({'border': 1, 'font_name': 'Open Sans'})
+        pool_row_fmt = workbook.add_format({'bold': True, 'border': 1, 'bg_color': '#F2F2F2', 'font_name': 'Open Sans'})
         
         # Number Formats
-        num_fmt = workbook.add_format({'border': 1, 'num_format': '#,##0'})
-        currency_fmt = workbook.add_format({'border': 1, 'num_format': '$#,##0;[Red]($#,##0)'})
-        pct_fmt = workbook.add_format({'border': 1, 'num_format': '0.0%'})
+        num_fmt = workbook.add_format({'border': 1, 'num_format': '#,##0', 'font_name': 'Open Sans'})
+        currency_fmt = workbook.add_format({'border': 1, 'num_format': '$#,##0;[Red]($#,##0)', 'font_name': 'Open Sans'})
+        pct_fmt = workbook.add_format({'border': 1, 'num_format': '0.0%', 'font_name': 'Open Sans'})
         
         # Prepare Dataframes
         # Table 1: Overview
@@ -513,13 +514,13 @@ def to_excel(df_in):
                     n_fmt = 'General'
                     if '($)' in col_name or 'Cost' in col_name or 'Value' in col_name or 'Revenue' in col_name:
                          n_fmt = '$#,##0;[Red]($#,##0)'
-                    elif '%' in col_name:
+                    elif '%' in col_name or 'Increase' in col_name:
                          n_fmt = '0.1%'
                     elif 'MWh' in col_name or 'Load' in col_name or 'Generation' in col_name:
                          n_fmt = '#,##0;[Red]-#,##0'
                     
                     # Create full format object
-                    props = {'border': 1, 'num_format': n_fmt}
+                    props = {'border': 1, 'num_format': n_fmt, 'font_name': 'Open Sans'}
                     if is_pool:
                         props['bold'] = True
                         props['bg_color'] = '#F2F2F2'
