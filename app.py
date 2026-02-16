@@ -295,10 +295,14 @@ st.sidebar.header("3. Exports")
 import io
 import tempfile
 
-def create_pdf(df_in, fig1, fig2):
+def create_pdf(df_in, fig1, fig2, agg_data):
     try:
         from fpdf import FPDF
         import datetime
+        import plotly.graph_objects as go
+        import plotly.express as px
+        import pandas as pd
+        import tempfile
     except ImportError:
         return None
 
@@ -414,25 +418,62 @@ def create_pdf(df_in, fig1, fig2):
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, "3. Visual Analysis", 0, 1)
     
+    # Generate Extra Charts from agg_data
+    load = agg_data['load']
+    solar = agg_data['solar']
+    wind = agg_data['wind']
+    total_re = agg_data['total_re']
+    
+    # Monthly Energy Balance
+    monthly = pd.DataFrame({'Load': load, 'Solar': solar, 'Wind': wind})
+    monthly = monthly.resample('M').sum() / 1000 # GWh
+    monthly.index = monthly.index.strftime('%b')
+    monthly['Renewables'] = monthly['Solar'] + monthly['Wind']
+    
+    fig_bar = px.bar(monthly, x=monthly.index, y=['Renewables'], title="Aggregated Pool - Monthly Energy Balance", color_discrete_map={'Renewables': '#00CC96'})
+    fig_bar.add_trace(go.Scatter(x=monthly.index, y=monthly['Load'], name='Load', line=dict(color='#AB63FA', width=3)))
+    
+    # Daily Net Position
+    net_pos = total_re - load
+    daily_pos = net_pos.resample('D').sum() / 1000 # GWh
+    fig_pos = go.Figure()
+    fig_pos.add_trace(go.Bar(
+        x=daily_pos.index, 
+        y=daily_pos,
+        marker_color=daily_pos.apply(lambda x: '#00CC96' if x >= 0 else '#EF553B'),
+        name='Daily Net Position'
+    ))
+    fig_pos.update_layout(title="Aggregated Pool - Daily Net Position (GWh)", xaxis_title="Date", yaxis_title="GWh")
+
     chart_paths = []
     try:
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp1:
-             fig1.write_image(tmp1.name, width=1000, height=500, scale=2)
-             chart_paths.append(tmp1.name)
+        # Save charts to temp
+        plots = [fig1, fig2, fig_bar, fig_pos]
         
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp2:
-             fig2.write_image(tmp2.name, width=1000, height=500, scale=2)
-             chart_paths.append(tmp2.name)
+        for p in plots:
+             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                 p.write_image(tmp.name, width=1000, height=500, scale=2)
+                 chart_paths.append(tmp.name)
 
-        if len(chart_paths) >= 2:
+        # Embed
+        if len(chart_paths) >= 4:
             pdf.ln(5)
             pdf.set_font("Arial", 'B', 12)
+            
             pdf.cell(0, 10, "CFE Optimization Impact", 0, 1)
             pdf.image(chart_paths[0], w=250)
             
             pdf.add_page()
             pdf.cell(0, 10, "Financial Value Generation", 0, 1)
             pdf.image(chart_paths[1], w=250)
+            
+            pdf.add_page()
+            pdf.cell(0, 10, "Monthly Energy Balance", 0, 1)
+            pdf.image(chart_paths[2], w=250)
+            
+            pdf.add_page()
+            pdf.cell(0, 10, "Daily Net Position (GWh)", 0, 1)
+            pdf.image(chart_paths[3], w=250)
             
     except Exception as e:
         print(f"Chart generation failed: {e}")
